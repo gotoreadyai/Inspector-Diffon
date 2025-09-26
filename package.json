@@ -2,7 +2,7 @@
     "name": "inspector-diffon",
     "displayName": "Inspector Diffon",
     "description": "LLM-powered diff tool with full file operations (CREATE, DELETE, RENAME, MODIFY) and task management",
-    "version": "0.1.4",
+    "version": "0.1.22",
     "publisher": "gotoreadyai",
     "repository": {
         "type": "git",
@@ -17,230 +17,82 @@
     "bugs": {
         "url": "https://github.com/grzegorz/inspector-diff/issues"
     },
-    "keywords": [
-        "llm",
-        "diff",
-        "ai",
-        "search-replace",
-        "code-modification",
-        "claude",
-        "gpt",
-        "refactoring",
-        "task-management"
-    ],
     "engines": {
-        "vscode": "^1.74.0"
+        "vscode": "^1.90.0"
     },
     "categories": [
-        "Other",
-        "Programming Languages",
-        "Snippets"
+        "Other"
     ],
-    "galleryBanner": {
-        "color": "#1e1e1e",
-        "theme": "dark"
-    },
+    "icon": "resources/icon.png",
     "main": "./out/extension.js",
-    "activationEvents": [],
+    "activationEvents": [
+        "onView:llmDiffTaskInput",
+        "onCommand:llmDiff.generatePromptFromPanel",
+        "onCommand:llmDiff.sendChangeRequestPrompt",
+        "onCommand:llmDiff.addSelectedFilesToPrompt",
+        "onCommand:llmDiff.endTask",
+        "onCommand:llmDiff.onItemClicked",
+        "onCommand:llmDiff.notifySelectionChanged"
+    ],
     "contributes": {
-        "commands": [
-            {
-                "command": "llmDiff.insertDiff",
-                "title": "Inspector Diff: Apply Changes from LLM",
-                "category": "Inspector Diff"
-            },
-            {
-                "command": "llmDiff.switchTask",
-                "title": "Switch Task",
-                "category": "Inspector Diff",
-                "icon": "$(git-branch)"
-            },
-            {
-                "command": "llmDiff.startTask",
-                "title": "Start New Task",
-                "category": "Inspector Diff"
-            },
-            {
-                "command": "llmDiff.commitTask",
-                "title": "Commit Current Task",
-                "category": "Inspector Diff"
-            },
-            {
-                "command": "llmDiff.undoTask",
-                "title": "Undo Current Task",
-                "category": "Inspector Diff"
-            },
-            {
-                "command": "llmDiff.showTaskHistory",
-                "title": "Show Task History",
-                "category": "Inspector Diff"
-            },
-            {
-                "command": "llmDiff.showTaskActions",
-                "title": "Show Task Actions",
-                "category": "Inspector Diff"
-            },
-            {
-                "command": "llmDiff.toggleFile",
-                "title": "Toggle File Selection"
-            },
-            {
-                "command": "llmDiff.onItemClicked",
-                "title": "Toggle File Selection",
-                "when": "false"
-            },
-            {
-                "command": "llmDiff.generatePrompt",
-                "title": "Generate LLM Prompt",
-                "icon": "$(play)"
-            },
-            {
-                "command": "llmDiff.generatePromptFromPanel",
-                "title": "Generate Prompt From Panel",
-                "when": "false"
-            },
-            {
-                "command": "llmDiff.setGlobPattern",
-                "title": "Set File Pattern",
-                "icon": "$(settings-gear)"
-            }
-        ],
         "viewsContainers": {
             "activitybar": [
                 {
-                    "id": "inspector-diff-panel",
-                    "title": "Inspector Diff",
-                    "icon": "$(diff)"
+                    "id": "llmDiff",
+                    "title": "LLM Diff",
+                    "icon": "resources/icon.svg"
                 }
             ]
         },
         "views": {
-            "inspector-diff-panel": [
+            "llmDiff": [
+                {
+                    "id": "llmDiffTaskInput",
+                    "name": "Task",
+                    "type": "webview"
+                },
                 {
                     "id": "llmDiffFiles",
-                    "name": "Files",
-                    "icon": "$(files)",
-                    "contextualTitle": "Inspector Diff Files"
-                },
-                {
-                    "type": "webview",
-                    "id": "llmDiffTaskInput",
-                    "name": "Task Details",
-                    "icon": "$(edit)",
-                    "contextualTitle": "Task Input"
+                    "name": "Files"
                 }
             ]
         },
-        "viewsWelcome": [
+        "commands": [
             {
-                "view": "llmDiffFiles",
-                "contents": "No files found.\n[Set file pattern](command:llmDiff.setGlobPattern)"
-            }
-        ],
-        "menus": {
-            "view/title": [
-                {
-                    "command": "llmDiff.generatePrompt",
-                    "when": "view == llmDiffFiles",
-                    "group": "navigation@1"
-                },
-                {
-                    "command": "llmDiff.setGlobPattern",
-                    "when": "view == llmDiffFiles",
-                    "group": "navigation@2"
-                }
-            ],
-            "view/item/context": [
-                {
-                    "command": "llmDiff.toggleFile",
-                    "when": "view == llmDiffFiles && viewItem =~ /file/"
-                }
-            ],
-            "commandPalette": [
-                {
-                    "command": "llmDiff.insertDiff",
-                    "when": "editorIsOpen"
-                },
-                {
-                    "command": "llmDiff.startTask"
-                },
-                {
-                    "command": "llmDiff.commitTask"
-                },
-                {
-                    "command": "llmDiff.undoTask"
-                },
-                {
-                    "command": "llmDiff.showTaskHistory"
-                }
-            ]
-        },
-        "keybindings": [
+                "command": "llmDiff.generatePromptFromPanel",
+                "title": "Inspector Diffon: Generate Initial Prompt"
+            },
             {
-                "command": "llmDiff.insertDiff",
-                "key": "ctrl+shift+,",
-                "mac": "cmd+shift+,",
-                "when": "editorTextFocus"
+                "command": "llmDiff.sendChangeRequestPrompt",
+                "title": "Inspector Diffon: Copy Change Request Prompt"
+            },
+            {
+                "command": "llmDiff.addSelectedFilesToPrompt",
+                "title": "Inspector Diffon: Add Selected Files to Prompt"
+            },
+            {
+                "command": "llmDiff.endTask",
+                "title": "Inspector Diffon: End Task"
+            },
+            {
+                "command": "llmDiff.onItemClicked",
+                "title": "Inspector Diffon: Toggle File Selection"
+            },
+            {
+                "command": "llmDiff.notifySelectionChanged",
+                "title": "Inspector Diffon: Notify Selection Changed"
             }
-        ],
-        "configuration": {
-            "title": "Inspector Diff",
-            "properties": {
-                "inspectorDiff.defaultGlobPattern": {
-                    "type": "string",
-                    "default": "src/**/*.{ts,tsx,js,jsx}",
-                    "description": "Default file pattern for searching files"
-                },
-                "inspectorDiff.excludePattern": {
-                    "type": "string",
-                    "default": "**/{node_modules,dist,.next,.git,build,out,coverage}/**",
-                    "description": "Patterns to exclude from file search"
-                },
-                "inspectorDiff.autoSaveBeforeApply": {
-                    "type": "boolean",
-                    "default": true,
-                    "description": "Automatically save files before applying changes"
-                },
-                "inspectorDiff.showOutputChannel": {
-                    "type": "boolean",
-                    "default": false,
-                    "description": "Automatically show output channel after operations"
-                },
-                "inspectorDiff.groupByFolders": {
-                    "type": "boolean",
-                    "default": true,
-                    "description": "Show files grouped by folders in tree view"
-                },
-                "inspectorDiff.autoStartTask": {
-                    "type": "boolean",
-                    "default": false,
-                    "description": "Automatically start a new task when applying changes"
-                },
-                "inspectorDiff.gitIntegration": {
-                    "type": "boolean",
-                    "default": true,
-                    "description": "Enable git integration for commit/undo tasks"
-                }
-            }
-        }
+        ]
     },
     "scripts": {
-        "vscode:prepublish": "npm run compile",
+        "vscode:prepublish": "tsc -p ./",
         "compile": "tsc -p ./",
-        "watch": "tsc -watch -p ./",
-        "pretest": "npm run compile && npm run lint",
-        "lint": "eslint src --ext ts",
-        "test": "node ./out/test/runTest.js",
-        "package": "vsce package",
-        "publish": "vsce publish"
+        "watch": "tsc -w -p ./",
+        "lint": "eslint src --ext ts"
     },
     "devDependencies": {
-        "@types/vscode": "^1.74.0",
-        "@types/node": "16.x",
-        "@typescript-eslint/eslint-plugin": "^5.45.0",
-        "@typescript-eslint/parser": "^5.45.0",
-        "eslint": "^8.28.0",
-        "typescript": "^4.9.5",
-        "@vscode/vsce": "^2.22.0"
+        "@types/node": "^20.11.30",
+        "typescript": "^5.4.5",
+        "eslint": "^8.57.0"
     }
 }

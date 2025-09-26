@@ -1,300 +1,215 @@
+// path: src/extension.ts
 import * as vscode from 'vscode';
 import { LLMFileTreeProvider } from './fileTreeProvider';
-import { TaskInputPanel } from './taskInputPanel';
-import { OperationsParser, OperationsExecutor } from './operations';
 import { TaskManager } from './taskManager';
-import { buildPrompt } from './promptBuilder';
-
-const outputChannel = vscode.window.createOutputChannel('Inspector Diff');
-
-let taskManager: TaskManager | null = null;
-let taskInputPanel: TaskInputPanel | null = null;
-let statusBarItem: vscode.StatusBarItem;
-
-async function applyDiffCommand() {
-  const editor = vscode.window.activeTextEditor;
-  if (!editor) {
-    vscode.window.showErrorMessage('Paste LLM response and select it');
-    return;
-  }
-
-  // Check if there's an active task
-  if (!taskManager?.getCurrentTask()) {
-    vscode.window.showErrorMessage(
-      'No active task. Use "Generate LLM Prompt" to start a task first'
-    );
-    return;
-  }
-
-  const text = editor.selection && !editor.selection.isEmpty
-    ? editor.document.getText(editor.selection)
-    : editor.document.getText();
-
-  // Parse all operations
-  const operations = OperationsParser.parse(text);
-  
-  if (operations.length === 0) {
-    vscode.window.showErrorMessage('No valid operation blocks found');
-    outputChannel.show();
-    return;
-  }
-
-  // Show current task in status
-  const currentTask = taskManager.getCurrentTask()!;
-  vscode.window.setStatusBarMessage(
-    `Applying to task: ${currentTask.name}`,
-    3000
-  );
-
-  // Execute operations
-  const executor = new OperationsExecutor(outputChannel);
-  const { success, errors } = await executor.executeAll(operations);
-  
-  // Add to current task
-  taskManager.addOperations(operations);
-  const summary = taskManager.getTaskSummary();
-  vscode.window.setStatusBarMessage(summary, 5000);
-  updateStatusBar();
-  taskInputPanel?.updateView();
-
-  // Show results
-  if (success > 0 && errors === 0) {
-    vscode.window.showInformationMessage(
-      `Applied ${success} operations to "${currentTask.name}"`,
-      'Commit Task',
-      'Continue Task'
-    ).then(selection => {
-      if (selection === 'Commit Task' && taskManager) {
-        taskManager.commitTask();
-      }
-    });
-  } else if (errors > 0) {
-    vscode.window.showWarningMessage(
-      `Applied ${success} operations, ${errors} errors - check Output`,
-      'Undo Task',
-      'View Output'
-    ).then(selection => {
-      if (selection === 'Undo Task' && taskManager) {
-        taskManager.undoTask();
-      } else if (selection === 'View Output') {
-        outputChannel.show();
-      }
-    });
-  }
-}
+import { buildFilesContextPrompt, buildChangeRequestPrompt } from './promptBuilder';
+import { TaskInfoProvider } from './taskInfoProvider';
 
 export function activate(context: vscode.ExtensionContext) {
-  const rootPath = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
-  
-  // Create status bar item
-  statusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 100);
-  statusBarItem.command = 'llmDiff.showTaskHistory';
-  context.subscriptions.push(statusBarItem);
-  
-  // Initialize task manager if workspace is open
-  if (rootPath) {
-    taskManager = new TaskManager(rootPath, outputChannel);
-    updateStatusBar();
-    
-    // Create webview provider for task input
-    taskInputPanel = new TaskInputPanel(
-      context.extensionUri,
-      taskManager,
-      (name: string, description: string) => {
-        // Callback when task is created from panel
-        const existingTask = taskManager?.findTaskByName(name);
-        if (existingTask) {
-          taskManager?.setCurrentTask(existingTask);
-        } else {
-          taskManager?.startTask(name, description);
-        }
-        updateStatusBar();
-        taskInputPanel?.updateView();
-      }
-    );
-    
-    // Register webview provider
-    context.subscriptions.push(
-      vscode.window.registerWebviewViewProvider(
-        TaskInputPanel.viewType,
-        taskInputPanel
-      )
-    );
-    
-    // Tree view for file selection
-    const treeProvider = new LLMFileTreeProvider(rootPath);
-    
-    const treeView = vscode.window.createTreeView('llmDiffFiles', {
-      treeDataProvider: treeProvider,
-      showCollapseAll: true,
-      canSelectMany: false
-    });
-
-    // Tree view commands
-    context.subscriptions.push(
-      vscode.commands.registerCommand('llmDiff.toggleFile', (file) =>
-        treeProvider.toggleFileSelection(file)
-      ),
-      vscode.commands.registerCommand('llmDiff.onItemClicked', (file) => {
-        treeProvider.toggleFileSelection(file);
-      }),
-      vscode.commands.registerCommand('llmDiff.setGlobPattern', async () => {
-        const pattern = await vscode.window.showInputBox({
-          prompt: 'Enter file pattern (glob)',
-          value: 'src/**/*.{ts,tsx,js,jsx}',
-          placeHolder: 'e.g. src/**/*.ts'
-        });
-        if (pattern) {
-          await treeProvider.setGlobPattern(pattern);
-        }
-      }),
-      vscode.commands.registerCommand('llmDiff.generatePromptFromPanel', async (taskName: string, taskDescription: string) => {
-        const selected = treeProvider.getSelectedFiles();
-        if (selected.length === 0) {
-          vscode.window.showWarningMessage('Select files in the Files panel first');
-          return;
-        }
-        
-        // Create or switch task
-        const existingTask = taskManager?.findTaskByName(taskName);
-        if (existingTask) {
-          taskManager?.setCurrentTask(existingTask);
-        } else {
-          taskManager?.startTask(taskName, taskDescription);
-        }
-        updateStatusBar();
-        taskInputPanel?.updateView();
-
-        const promptText = await buildPrompt(taskDescription, selected, taskName);
-
-        const doc = await vscode.workspace.openTextDocument({
-          language: 'markdown',
-          content: promptText,
-        });
-        await vscode.window.showTextDocument(doc);
-        await vscode.env.clipboard.writeText(promptText);
-        
-        vscode.window.showInformationMessage(`Prompt copied (Task: ${taskName})`);
-      }),
-      vscode.commands.registerCommand('llmDiff.generatePrompt', async () => {
-        // This command now just focuses the panel
-        vscode.commands.executeCommand('llmDiffTaskInput.focus');
-        vscode.window.showInformationMessage('Enter task details in the Task Details panel');
-      })
-    );
+  const out = vscode.window.createOutputChannel('LLM Diff');
+  const root = vscode.workspace.workspaceFolders?.[0]?.uri;
+  if (!root) {
+    vscode.window.showErrorMessage('Otwórz folder roboczy, aby korzystać z LLM Diff.');
+    return;
   }
 
-  // Main commands
+  // ——— Core ———
+  const taskManager = new TaskManager(root.fsPath, out);
+  const fileTree = new LLMFileTreeProvider(root.fsPath, context);
+  const taskInfo = new TaskInfoProvider(taskManager);
+
+  // Panel wejściowy
+  const taskPanelProvider = new (require('./taskInputPanel').TaskInputPanel)(
+    root,
+    taskManager,
+    async (name: string, description: string) => {
+      const task = taskManager.startTask(name, description);
+      taskPanelProvider.updateView();
+      vscode.commands.executeCommand('llmDiff.notifySelectionChanged');
+      vscode.window.showInformationMessage(`Utworzono zadanie „${task.name}”.`);
+      taskInfo.refresh();
+    }
+  );
+
+  // Widoki
   context.subscriptions.push(
-    vscode.commands.registerCommand('llmDiff.insertDiff', applyDiffCommand),
-    
-    vscode.commands.registerCommand('llmDiff.switchTask', async () => {
-      if (!taskManager) return;
-      
-      const tasks = taskManager.loadRecentTasks(20);
-      if (tasks.length === 0) {
-        vscode.window.showInformationMessage('No tasks found. Start a new task by generating a prompt.');
-        return;
-      }
-      
-      const items = tasks.map(t => ({
-        label: t.name,
-        description: t.status === 'applied' ? '$(circle-filled) Active' : t.status,
-        detail: `${t.operations.length} operations, ${t.affectedFiles.length} files affected`,
-        task: t
-      }));
-      
-      const selected = await vscode.window.showQuickPick(items, {
-        placeHolder: 'Select task to switch to'
-      });
-      
-      if (selected) {
-        taskManager.setCurrentTask(selected.task);
-        updateStatusBar();
-        taskInputPanel?.updateView();
-        vscode.window.showInformationMessage(`Switched to task: ${selected.task.name}`);
-      }
-    }),
-    
-    vscode.commands.registerCommand('llmDiff.startTask', async () => {
-      if (!taskManager) return;
-      
-      const name = await vscode.window.showInputBox({
-        prompt: 'Enter task name',
-        placeHolder: 'e.g., Refactor auth module'
-      });
-      
-      if (name) {
-        taskManager.startTask(name);
-        vscode.window.showInformationMessage(`Started task: ${name}`);
-      }
-    }),
-    
-    vscode.commands.registerCommand('llmDiff.commitTask', () => {
-      taskManager?.commitTask();
-    }),
-    
-    vscode.commands.registerCommand('llmDiff.undoTask', () => {
-      taskManager?.undoTask();
-    }),
-    
-    vscode.commands.registerCommand('llmDiff.showTaskActions', async () => {
-      if (!taskManager?.getCurrentTask()) {
-        vscode.window.showWarningMessage('No active task');
-        return;
-      }
-      
-      const action = await vscode.window.showQuickPick(
-        ['Commit Task', 'Undo Task', 'Switch Task', 'Cancel'],
-        { placeHolder: 'Select action for current task' }
-      );
-      
-      switch (action) {
-        case 'Commit Task':
-          await taskManager.commitTask();
-          taskInputPanel?.updateView();
-          break;
-        case 'Undo Task':
-          await taskManager.undoTask();
-          taskInputPanel?.updateView();
-          break;
-        case 'Switch Task':
-          vscode.commands.executeCommand('llmDiff.switchTask');
-          break;
-      }
-    }),
-    
-    vscode.commands.registerCommand('llmDiff.showTaskHistory', () => {
-      if (!taskManager) return;
-      
-      const tasks = taskManager.loadRecentTasks();
-      const items = tasks.map(t => ({
-        label: t.name,
-        description: `${t.status} - ${new Date(t.createdAt).toLocaleDateString()}`,
-        detail: `${t.operations.length} operations on ${t.affectedFiles.length} files`
-      }));
-      
-      vscode.window.showQuickPick(items, {
-        placeHolder: 'Recent tasks'
-      });
+    vscode.window.registerWebviewViewProvider('llmDiffTaskInput', taskPanelProvider, {
+      webviewOptions: { retainContextWhenHidden: true }
     })
   );
-}
 
-function updateStatusBar() {
-  const currentTask = taskManager?.getCurrentTask();
-  if (currentTask) {
-    statusBarItem.text = `$(git-branch) Task: ${currentTask.name}`;
-    statusBarItem.tooltip = taskManager?.getTaskSummary() || '';
-    statusBarItem.show();
-  } else {
-    statusBarItem.text = `$(git-branch) No active task`;
-    statusBarItem.tooltip = 'Click to view task history';
-    statusBarItem.show();
+  const filesTreeView = vscode.window.createTreeView('llmDiffFiles', {
+    treeDataProvider: fileTree,
+    showCollapseAll: true
+  });
+  context.subscriptions.push(filesTreeView);
+
+  const taskInfoView = vscode.window.createTreeView('llmDiffTaskInfo', {
+    treeDataProvider: taskInfo,
+    showCollapseAll: false
+  });
+  context.subscriptions.push(taskInfoView);
+
+  // Utility: pokaż prompt + schowek
+  async function showPromptDoc(title: string, content: string) {
+    await vscode.env.clipboard.writeText(content);
+    const doc = await vscode.workspace.openTextDocument({ language: 'markdown', content });
+    await vscode.window.showTextDocument(doc, { preview: false });
+    vscode.window.showInformationMessage(`${title} — skopiowano do schowka.`);
   }
+
+  // ========== KOMENDY ==========
+
+  // Toggle w drzewku
+  context.subscriptions.push(
+    vscode.commands.registerCommand('llmDiff.onItemClicked', (item) => {
+      fileTree.toggleFileSelection(item);
+    })
+  );
+
+  // Szybkie akcje selekcji
+  context.subscriptions.push(
+    vscode.commands.registerCommand('llmDiff.selectAll', () => fileTree.selectAll()),
+    vscode.commands.registerCommand('llmDiff.deselectAll', () => fileTree.deselectAll()),
+    vscode.commands.registerCommand('llmDiff.selectFolder', async () => {
+      const folder = await vscode.window.showInputBox({ prompt: 'Podaj ścieżkę folderu (relatywnie do workspace)', placeHolder: 'src/components' });
+      if (folder) fileTree.selectFolder(folder);
+    }),
+    vscode.commands.registerCommand('llmDiff.setGlobPattern', async () => {
+      const pat = await vscode.window.showInputBox({
+        prompt: 'Wzorzec wyszukiwania plików',
+        value: 'src/**/*.{ts,tsx,js,jsx}'
+      });
+      if (pat) await fileTree.setGlobPattern(pat);
+    }),
+    vscode.commands.registerCommand('llmDiff.saveSelectionAsSet', async () => {
+      const name = await vscode.window.showInputBox({ prompt: 'Nazwa zestawu zaznaczeń', placeHolder: 'MVP screens' });
+      if (name) fileTree.saveCurrentSet(name);
+    }),
+    vscode.commands.registerCommand('llmDiff.loadSelectionSet', async () => {
+      const sets = fileTree.getSavedSets();
+      if (sets.length === 0) {
+        vscode.window.showInformationMessage('Brak zapisanych zestawów.');
+        return;
+      }
+      const picked = await vscode.window.showQuickPick(sets, { title: 'Wczytaj zestaw zaznaczeń' });
+      if (picked) fileTree.loadSet(picked);
+    })
+  );
+
+  // Dodaj zaznaczone pliki do promptu — tylko w trybie „w zadaniu”
+  context.subscriptions.push(
+    vscode.commands.registerCommand('llmDiff.addSelectedFilesToPrompt', async () => {
+      const task = taskManager.getCurrentTask();
+      if (!task) {
+        vscode.window.showWarningMessage('Najpierw utwórz zadanie.');
+        return;
+      }
+
+      const selected = fileTree.getSelectedFiles();
+      if (selected.length === 0) {
+        vscode.window.showInformationMessage('Najpierw zaznacz pliki.');
+        return;
+      }
+
+      const selectedRel = selected.map(u => vscode.workspace.asRelativePath(u));
+      const newRel = taskManager.getNewFiles(selectedRel);
+      if (newRel.length === 0) {
+        taskPanelProvider.updateSetAddFilesEnabled(false);
+        vscode.window.showInformationMessage('Brak nowych plików do dodania (w zadaniu).');
+        return;
+      }
+
+      const newUris = selected.filter(u => newRel.includes(vscode.workspace.asRelativePath(u)));
+      const prompt = await buildFilesContextPrompt(newUris, 'Te pliki zostają dodane do kontekstu rozmowy (zadanie).');
+
+      taskManager.addIncludedFiles(newRel);
+      taskPanelProvider.updateSetAddFilesEnabled(false);
+      taskPanelProvider.updateView();
+      taskInfo.refresh();
+
+      await showPromptDoc('Files Context Prompt', prompt);
+    })
+  );
+
+  // Zmiana selekcji -> włącz/wyłącz przyciski
+  context.subscriptions.push(
+    vscode.commands.registerCommand('llmDiff.notifySelectionChanged', async () => {
+      const task = taskManager.getCurrentTask();
+      const selected = fileTree.getSelectedFiles();
+      const selectedRel = selected.map(u => vscode.workspace.asRelativePath(u));
+
+      if (!task) {
+        taskPanelProvider.updateSetAddFilesEnabled(false);
+      } else {
+        const newRel = taskManager.getNewFiles(selectedRel);
+        taskPanelProvider.updateSetAddFilesEnabled(newRel.length > 0);
+      }
+    })
+  );
+
+  // Change request (w zadaniu)
+  context.subscriptions.push(
+    vscode.commands.registerCommand('llmDiff.sendChangeRequestPrompt', async (continuation: string) => {
+      const task = taskManager.getCurrentTask();
+      if (!task) { vscode.window.showWarningMessage('Brak aktywnego zadania.'); return; }
+      const prompt = await buildChangeRequestPrompt(task, continuation);
+      await showPromptDoc('Change Request Prompt', prompt);
+    })
+  );
+
+  // Koniec zadania
+  context.subscriptions.push(
+    vscode.commands.registerCommand('llmDiff.endTask', async () => {
+      taskManager.clearCurrentTask();
+      taskPanelProvider.updateView();
+      taskInfo.refresh();
+      vscode.commands.executeCommand('llmDiff.notifySelectionChanged');
+      vscode.window.showInformationMessage('Zadanie zakończone.');
+    })
+  );
+
+  // Akcje zadania (commit/undo/output)
+  context.subscriptions.push(
+    vscode.commands.registerCommand('llmDiff.showTaskActions', async () => {
+      const task = taskManager.getCurrentTask();
+      if (!task) { vscode.window.showInformationMessage('Brak aktywnego zadania.'); return; }
+
+      const picked = await vscode.window.showQuickPick(
+        [
+          { label: '$(git-commit) Zatwierdź w git', action: 'commit' },
+          { label: '$(discard) Cofnij zmiany (hard reset)', action: 'undo' },
+          { label: '$(output) Otwórz Output', action: 'output' }
+        ],
+        { title: `Akcje dla: ${task.name}` }
+      );
+      if (!picked) return;
+
+      if (picked.action === 'commit') {
+        try {
+          await taskManager.commitTask();
+          taskPanelProvider.updateView();
+          taskInfo.refresh();
+        } catch (e: any) {
+          vscode.window.showErrorMessage(`Nie można zatwierdzić: ${e?.message ?? e}`);
+        }
+      } else if (picked.action === 'undo') {
+        try {
+          await taskManager.undoTask();
+          taskPanelProvider.updateView();
+          taskInfo.refresh();
+        } catch (e: any) {
+          vscode.window.showErrorMessage(`Nie można cofnąć: ${e?.message ?? e}`);
+        }
+      } else if (picked.action === 'output') {
+        out.show(true);
+      }
+    })
+  );
+
+  // Stan początkowy
+  taskPanelProvider.updateView();
+  vscode.commands.executeCommand('llmDiff.notifySelectionChanged');
 }
 
-export function deactivate() {
-  outputChannel.dispose();
-  statusBarItem?.dispose();
-}
+export function deactivate() {}

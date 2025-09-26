@@ -1,3 +1,4 @@
+// path: src/fileTreeProvider.ts
 import * as vscode from 'vscode';
 import * as path from 'path';
 
@@ -11,10 +12,17 @@ export class FolderItem extends vscode.TreeItem {
     public readonly collapsibleState: vscode.TreeItemCollapsibleState
   ) {
     super(folderName, collapsibleState);
-    
+
     this.iconPath = vscode.ThemeIcon.Folder;
     this.contextValue = 'folder';
     this.tooltip = folderPath;
+
+    // Kontekstowe menu: zaznacz folder
+    this.command = {
+      command: 'llmDiff.selectFolder',
+      title: 'Zaznacz folder',
+      arguments: [this.folderPath]
+    };
   }
 }
 
@@ -25,30 +33,30 @@ export class FileItem extends vscode.TreeItem {
     public isSelected: boolean = false
   ) {
     super(resourceUri, collapsibleState);
-    
+
     const fileName = path.basename(resourceUri.fsPath);
     this.label = fileName;
     this.tooltip = vscode.workspace.asRelativePath(resourceUri);
-    
-    // Checkbox jako ikona
+
+    // Ikony
     this.iconPath = new vscode.ThemeIcon(
-      isSelected ? 'pass-filled' : 'circle-outline'
+      isSelected ? 'check' : 'circle-large-outline'
     );
-    
-    // Komenda przy kliknięciu
+
+    // Klik = toggle
     this.command = {
       command: 'llmDiff.onItemClicked',
-      title: 'Toggle',
+      title: 'Przełącz zaznaczenie',
       arguments: [this]
     };
-    
+
     this.contextValue = isSelected ? 'fileSelected' : 'fileUnselected';
   }
 
   toggleSelection() {
     this.isSelected = !this.isSelected;
     this.iconPath = new vscode.ThemeIcon(
-      this.isSelected ? 'pass-filled' : 'circle-outline'
+      this.isSelected ? 'check' : 'circle-large-outline'
     );
     this.contextValue = this.isSelected ? 'fileSelected' : 'fileUnselected';
   }
@@ -78,9 +86,7 @@ export class LLMFileTreeProvider implements vscode.TreeDataProvider<TreeElement>
     this.loadFiles();
   }
 
-  refresh(): void {
-    this._onDidChangeTreeData.fire();
-  }
+  refresh(): void { this._onDidChangeTreeData.fire(); }
 
   async setGlobPattern(pattern: string) {
     this.globPattern = pattern;
@@ -94,147 +100,110 @@ export class LLMFileTreeProvider implements vscode.TreeDataProvider<TreeElement>
       const files = await vscode.workspace.findFiles(
         this.globPattern,
         '**/{node_modules,dist,.next,.git,build,out,coverage}/**',
-        500
+        1000
       );
-      
+
       this.fileItems.clear();
       this.rootStructure = { folders: new Map(), files: [] };
-      
-      // Sortuj pliki według ścieżki
+
       files.sort((a, b) => a.fsPath.localeCompare(b.fsPath));
-      
+
       for (const file of files) {
         const item = new FileItem(file, vscode.TreeItemCollapsibleState.None);
         this.fileItems.set(file.fsPath, item);
-        
-        // Dodaj do struktury drzewa
+
         const relativePath = vscode.workspace.asRelativePath(file);
         const parts = relativePath.split(path.sep);
-        
+
         let currentStructure = this.rootStructure;
-        
-        // Nawiguj/twórz strukturę folderów
+
         for (let i = 0; i < parts.length - 1; i++) {
           const folderName = parts[i];
-          
           if (!currentStructure.folders.has(folderName)) {
-            currentStructure.folders.set(folderName, {
-              folders: new Map(),
-              files: []
-            });
+            currentStructure.folders.set(folderName, { folders: new Map(), files: [] });
           }
-          
           const nextStructure = currentStructure.folders.get(folderName);
-          if (!nextStructure) {
-            // To nie powinno się zdarzyć, ale TypeScript tego nie wie
-            continue;
-          }
+          if (!nextStructure) continue;
           currentStructure = nextStructure;
         }
-        
-        // Dodaj plik do odpowiedniego folderu
+
         currentStructure.files.push(item);
       }
-      
+
       vscode.window.showInformationMessage(`Znaleziono ${files.length} plików`);
-    } catch (error) {
-      vscode.window.showErrorMessage(`Błąd ładowania plików: ${error}`);
+    } catch (error: any) {
+      vscode.window.showErrorMessage(`Błąd ładowania plików: ${error?.message ?? String(error)}`);
     }
   }
 
-  getTreeItem(element: TreeElement): vscode.TreeItem {
-    return element;
-  }
+  getTreeItem(element: TreeElement): vscode.TreeItem { return element; }
 
   async getChildren(element?: TreeElement): Promise<TreeElement[]> {
-    if (!this.workspaceRoot) {
-      return [];
-    }
+    if (!this.workspaceRoot) return [];
 
-    // Root level
     if (!element) {
-      if (this.fileItems.size === 0) {
-        await this.loadFiles();
-      }
-      
+      if (this.fileItems.size === 0) { await this.loadFiles(); }
       const result: TreeElement[] = [];
-      
-      // Dodaj foldery z roota
-      this.rootStructure.folders.forEach((structure, folderName) => {
-        result.push(new FolderItem(
-          folderName,
-          folderName,
-          vscode.TreeItemCollapsibleState.Collapsed
-        ));
+      this.rootStructure.folders.forEach((_s, folderName) => {
+        result.push(new FolderItem(folderName, folderName, vscode.TreeItemCollapsibleState.Collapsed));
       });
-      
-      // Dodaj pliki z roota
       result.push(...this.rootStructure.files);
-      
       return result;
     }
-    
-    // Jeśli element to folder
+
     if (element instanceof FolderItem) {
       const parts = element.folderPath.split(path.sep);
-      
-      // Znajdź strukturę tego folderu
       let currentStructure = this.rootStructure;
       for (const part of parts) {
         const nextStructure = currentStructure.folders.get(part);
-        if (!nextStructure) {
-          return [];
-        }
+        if (!nextStructure) return [];
         currentStructure = nextStructure;
       }
-      
+
       const result: TreeElement[] = [];
-      
-      // Dodaj podfoldery
-      currentStructure.folders.forEach((structure, folderName) => {
+      currentStructure.folders.forEach((_s, folderName) => {
         const fullPath = path.join(element.folderPath, folderName);
-        result.push(new FolderItem(
-          folderName,
-          fullPath,
-          vscode.TreeItemCollapsibleState.Collapsed
-        ));
+        result.push(new FolderItem(folderName, fullPath, vscode.TreeItemCollapsibleState.Collapsed));
       });
-      
-      // Dodaj pliki
       result.push(...currentStructure.files);
-      
       return result;
     }
-    
+
     return [];
+  }
+
+  private notifySelectionChanged() {
+    vscode.commands.executeCommand('llmDiff.notifySelectionChanged');
   }
 
   toggleFileSelection(file: FileItem) {
     file.toggleSelection();
     this.refresh();
-    
     const selected = this.getSelectedFiles();
-    vscode.window.setStatusBarMessage(`Zaznaczono: ${selected.length} plików`, 3000);
+    vscode.window.setStatusBarMessage(`Zaznaczono: ${selected.length} plików`, 1500);
+    this.notifySelectionChanged();
   }
 
   selectAll() {
     this.fileItems.forEach(item => {
       item.isSelected = true;
-      item.iconPath = new vscode.ThemeIcon('pass-filled');
+      item.iconPath = new vscode.ThemeIcon('check');
       item.contextValue = 'fileSelected';
     });
     this.refresh();
-    vscode.window.showInformationMessage(`Zaznaczono wszystkie ${this.fileItems.size} plików`);
+    vscode.window.showInformationMessage(`Zaznaczono wszystkie ${this.fileItems.size} pliki.`);
+    this.notifySelectionChanged();
   }
 
   deselectAll() {
     this.fileItems.forEach(item => {
       item.isSelected = false;
-      item.iconPath = new vscode.ThemeIcon('circle-outline');
+      item.iconPath = new vscode.ThemeIcon('circle-large-outline');
       item.contextValue = 'fileUnselected';
     });
     this.refresh();
-    vscode.window.showInformationMessage('Odznaczono wszystkie pliki');
+    vscode.window.showInformationMessage('Odznaczono wszystkie pliki.');
+    this.notifySelectionChanged();
   }
 
   selectFolder(folderPath: string) {
@@ -243,13 +212,14 @@ export class LLMFileTreeProvider implements vscode.TreeDataProvider<TreeElement>
       const relativePath = vscode.workspace.asRelativePath(filePath);
       if (relativePath.startsWith(folderPath + path.sep) || path.dirname(relativePath) === folderPath) {
         item.isSelected = true;
-        item.iconPath = new vscode.ThemeIcon('pass-filled');
+        item.iconPath = new vscode.ThemeIcon('check');
         item.contextValue = 'fileSelected';
         count++;
       }
     });
     this.refresh();
-    vscode.window.showInformationMessage(`Zaznaczono ${count} plików w folderze ${folderPath}`);
+    vscode.window.showInformationMessage(`Zaznaczono ${count} plików w folderze „${folderPath}”.`);
+    this.notifySelectionChanged();
   }
 
   getSelectedFiles(): vscode.Uri[] {
@@ -261,12 +231,12 @@ export class LLMFileTreeProvider implements vscode.TreeDataProvider<TreeElement>
   saveCurrentSet(name: string) {
     const selected = this.getSelectedFiles().map(uri => uri.fsPath);
     if (selected.length === 0) {
-      vscode.window.showWarningMessage('Brak zaznaczonych plików do zapisania');
+      vscode.window.showWarningMessage('Brak zaznaczonych plików do zapisania.');
       return;
     }
     this.savedSets.set(name, selected);
     this.persistSavedSets();
-    vscode.window.showInformationMessage(`Zapisano zestaw "${name}" (${selected.length} plików)`);
+    vscode.window.showInformationMessage(`Zapisano zestaw „${name}” (${selected.length} plików).`);
   }
 
   loadSet(name: string) {
@@ -275,27 +245,23 @@ export class LLMFileTreeProvider implements vscode.TreeDataProvider<TreeElement>
       vscode.window.showErrorMessage(`Nie znaleziono zestawu: ${name}`);
       return;
     }
-
     this.deselectAll();
     let loadedCount = 0;
-    
     paths.forEach(filePath => {
       const item = this.fileItems.get(filePath);
       if (item) {
         item.isSelected = true;
-        item.iconPath = new vscode.ThemeIcon('pass-filled');
+        item.iconPath = new vscode.ThemeIcon('check');
         item.contextValue = 'fileSelected';
         loadedCount++;
       }
     });
-    
     this.refresh();
-    vscode.window.showInformationMessage(`Wczytano zestaw "${name}" (${loadedCount}/${paths.length} plików)`);
+    vscode.window.showInformationMessage(`Wczytano zestaw „${name}” (${loadedCount}/${paths.length} plików).`);
+    this.notifySelectionChanged();
   }
 
-  getSavedSets(): string[] {
-    return Array.from(this.savedSets.keys());
-  }
+  getSavedSets(): string[] { return Array.from(this.savedSets.keys()); }
 
   private persistSavedSets() {
     if (this.context) {
@@ -307,9 +273,7 @@ export class LLMFileTreeProvider implements vscode.TreeDataProvider<TreeElement>
   private loadSavedSets() {
     if (this.context) {
       const saved = this.context.workspaceState.get('llmDiff.savedSets') as [string, string[]][] | undefined;
-      if (saved) {
-        this.savedSets = new Map(saved);
-      }
+      if (saved) { this.savedSets = new Map(saved); }
     }
   }
 }

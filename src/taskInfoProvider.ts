@@ -1,3 +1,4 @@
+// path: src/taskInfoProvider.ts
 import * as vscode from 'vscode';
 import { TaskManager } from './taskManager';
 
@@ -21,12 +22,12 @@ export class TaskInfoProvider implements vscode.TreeDataProvider<TaskInfoItem> {
     }
 
     const currentTask = this.taskManager.getCurrentTask();
-    
+
     if (!currentTask) {
       return [
         new TaskInfoItem(
-          'No active task',
-          'Click "Generate Prompt" to start',
+          'Brak aktywnego zadania',
+          'Kliknij „Copy Init Files Prompt”, aby zacząć',
           vscode.TreeItemCollapsibleState.None,
           'empty'
         )
@@ -34,10 +35,10 @@ export class TaskInfoProvider implements vscode.TreeDataProvider<TaskInfoItem> {
     }
 
     if (!element) {
-      // Root level - show task name
+      // Root
       return [
         new TaskInfoItem(
-          `Task: ${currentTask.name}`,
+          `Zadanie: ${currentTask.name}`,
           `Status: ${currentTask.status}`,
           vscode.TreeItemCollapsibleState.Expanded,
           'task'
@@ -45,15 +46,14 @@ export class TaskInfoProvider implements vscode.TreeDataProvider<TaskInfoItem> {
       ];
     }
 
-    // Children of task - show details
+    // Dzieci
     const items: TaskInfoItem[] = [];
-    
-    // Add description if exists
+
     const description = (currentTask as any).description;
     if (description) {
       items.push(
         new TaskInfoItem(
-          'Description',
+          'Opis',
           description,
           vscode.TreeItemCollapsibleState.None,
           'description'
@@ -61,20 +61,19 @@ export class TaskInfoProvider implements vscode.TreeDataProvider<TaskInfoItem> {
       );
     }
 
-    // Add operation count
     if (currentTask.operations.length > 0) {
       const opCounts = new Map<string, number>();
       for (const op of currentTask.operations) {
         opCounts.set(op.type, (opCounts.get(op.type) || 0) + 1);
       }
-      
+
       const summary = Array.from(opCounts.entries())
-        .map(([type, count]) => `${count} ${type}`)
+        .map(([type, count]) => `${count} × ${type}`)
         .join(', ');
-      
+
       items.push(
         new TaskInfoItem(
-          'Operations',
+          'Operacje',
           summary,
           vscode.TreeItemCollapsibleState.None,
           'operations'
@@ -82,23 +81,21 @@ export class TaskInfoProvider implements vscode.TreeDataProvider<TaskInfoItem> {
       );
     }
 
-    // Add affected files count
-    if (currentTask.affectedFiles.length > 0) {
+    if (currentTask.includedFiles.length > 0) {
       items.push(
         new TaskInfoItem(
-          'Affected Files',
-          `${currentTask.affectedFiles.length} files`,
+          'Pliki w kontekście',
+          `${currentTask.includedFiles.length} pl.`,
           vscode.TreeItemCollapsibleState.None,
           'files'
         )
       );
     }
 
-    // Add actions
     items.push(
       new TaskInfoItem(
-        'Actions',
-        'Commit or Undo',
+        'Akcje',
+        'Zatwierdź lub cofnij zmiany',
         vscode.TreeItemCollapsibleState.None,
         'actions'
       )
@@ -121,10 +118,9 @@ class TaskInfoItem extends vscode.TreeItem {
     public readonly contextValue: string
   ) {
     super(label, collapsibleState);
-    
+
     this.tooltip = `${this.label}: ${this.description}`;
-    
-    // Set icons based on type
+
     switch (contextValue) {
       case 'task':
         this.iconPath = new vscode.ThemeIcon('git-branch');
@@ -142,7 +138,7 @@ class TaskInfoItem extends vscode.TreeItem {
         this.iconPath = new vscode.ThemeIcon('play');
         this.command = {
           command: 'llmDiff.showTaskActions',
-          title: 'Show Actions'
+          title: 'Pokaż akcje'
         };
         break;
       case 'empty':
