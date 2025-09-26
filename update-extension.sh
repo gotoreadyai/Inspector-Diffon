@@ -10,9 +10,9 @@ cd "$EXT_DIR"
 echo "🔄 Podbijam wersję w package.json..."
 npm version patch --no-git-tag-version
 
-# 2. Budowanie paczki
+# 2. Budowanie paczki (z automatycznym "yes" na pytania)
 echo "📦 Buduję paczkę..."
-vsce package
+yes | vsce package --allow-missing-repository
 
 # znajdź najnowszy .vsix
 VSIX_FILE=$(ls -t *.vsix | head -n 1)

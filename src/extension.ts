@@ -1,15 +1,9 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
 import * as fs from 'fs';
-
-/**
- * Rozszerzenie do diff z LLM
- * - Używa formatu SEARCH/REPLACE zamiast unified diff
- * - Prostsze i zawsze działa
- */
+import { LLMFileTreeProvider, FileItem } from './fileTreeProvider';
 
 let LAST_PROMPT: string | null = null;
-
 const outputChannel = vscode.window.createOutputChannel('LLM Diff');
 
 function log(message: string) {
@@ -115,8 +109,6 @@ interface SearchReplaceBlock {
 
 function extractSearchReplace(text: string): SearchReplaceBlock[] | null {
   const blocks: SearchReplaceBlock[] = [];
-  
-  // Regex dla naszego formatu
   const regex = /<<<FILE:\s*(.+?)>>>\s*<<<SEARCH>>>([\s\S]*?)<<<REPLACE>>>([\s\S]*?)<<<END>>>/g;
   
   let match;
@@ -211,9 +203,99 @@ async function insertDiffCmd() {
 }
 
 export function activate(context: vscode.ExtensionContext) {
+  const rootPath = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+  
+  // TreeView tylko jeśli jest workspace
+  if (rootPath) {
+    const treeProvider = new LLMFileTreeProvider(rootPath, context);
+    
+    const treeView = vscode.window.createTreeView('llmDiffFiles', {
+      treeDataProvider: treeProvider,
+      showCollapseAll: true,
+      canSelectMany: false
+    });
+
+    // Komendy dla TreeView
+    context.subscriptions.push(
+      vscode.commands.registerCommand('llmDiff.refreshFiles', () => 
+        treeProvider.refresh()
+      ),
+      vscode.commands.registerCommand('llmDiff.selectAll', () => 
+        treeProvider.selectAll()
+      ),
+      vscode.commands.registerCommand('llmDiff.deselectAll', () => 
+        treeProvider.deselectAll()
+      ),
+      vscode.commands.registerCommand('llmDiff.toggleFile', (file: FileItem) =>
+        treeProvider.toggleFileSelection(file)
+      ),
+      vscode.commands.registerCommand('llmDiff.onItemClicked', (file: FileItem) => {
+        treeProvider.toggleFileSelection(file);
+      }),
+      vscode.commands.registerCommand('llmDiff.setGlobPattern', async () => {
+        const pattern = await vscode.window.showInputBox({
+          prompt: 'Podaj wzorzec plików (glob pattern)',
+          value: 'src/**/*.{ts,tsx,js,jsx}',
+          placeHolder: 'np. src/**/*.ts'
+        });
+        if (pattern) {
+          await treeProvider.setGlobPattern(pattern);
+        }
+      }),
+      vscode.commands.registerCommand('llmDiff.generatePrompt', async () => {
+        const selected = treeProvider.getSelectedFiles();
+        if (selected.length === 0) {
+          vscode.window.showWarningMessage('Zaznacz pliki w panelu LLM Diff');
+          return;
+        }
+        
+        const task = await vscode.window.showInputBox({
+          prompt: 'Opisz zadanie',
+        });
+        if (!task) return;
+
+        const { content, paths } = await buildContext(selected);
+        const promptText = buildPrompt(task, content, paths);
+        LAST_PROMPT = promptText;
+
+        const doc = await vscode.workspace.openTextDocument({
+          language: 'markdown',
+          content: promptText,
+        });
+        await vscode.window.showTextDocument(doc);
+        await vscode.env.clipboard.writeText(promptText);
+        
+        log(`Prompt skopiowany dla plików: ${paths.join(', ')}`);
+        vscode.window.showInformationMessage('Prompt skopiowany do schowka');
+      }),
+      vscode.commands.registerCommand('llmDiff.saveSet', async () => {
+        const name = await vscode.window.showInputBox({
+          prompt: 'Nazwa zestawu plików'
+        });
+        if (name) {
+          treeProvider.saveCurrentSet(name);
+        }
+      }),
+      vscode.commands.registerCommand('llmDiff.loadSet', async () => {
+        const sets = treeProvider.getSavedSets();
+        if (sets.length === 0) {
+          vscode.window.showInformationMessage('Brak zapisanych zestawów');
+          return;
+        }
+        const selected = await vscode.window.showQuickPick(sets, {
+          placeHolder: 'Wybierz zestaw do wczytania'
+        });
+        if (selected) {
+          treeProvider.loadSet(selected);
+        }
+      })
+    );
+  }
+
+  // Oryginalne komendy
   context.subscriptions.push(
     vscode.commands.registerCommand('llmDiff.requestDiff', requestDiffCmd),
-    vscode.commands.registerCommand('llmDiff.insertDiff', insertDiffCmd),
+    vscode.commands.registerCommand('llmDiff.insertDiff', insertDiffCmd)
   );
 }
 
