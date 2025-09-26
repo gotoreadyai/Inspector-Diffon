@@ -1,10 +1,14 @@
 {
     "name": "vscode-llm-diff",
     "displayName": "LLM Diff Generator (Manual)",
-    "description": "Przygotuj prompt z plików do LLM i wklej unified diff, aby zapisać i zastosować patch.",
-    "version": "0.2.2",
-    "publisher": "your-name",
-    "license": "MIT",
+    "description": "Prepare prompt with files for LLM and paste unified diff to save and apply patch.",
+    "version": "0.2.4",
+    "publisher": "gotoreadyai",
+    "repository": {
+        "type": "git",
+        "url": "https://github.com/gotoreadyai/Inspector-Diffon.git"
+    },
+    "license": "GPL-3.0",
     "engines": {
         "vscode": "^1.85.0"
     },
