@@ -1,8 +1,8 @@
 {
     "name": "inspector-diff",
     "displayName": "Inspector Diff",
-    "description": "LLM-powered diff tool using SEARCH/REPLACE format for efficient code modifications",
-    "version": "0.0.9",
+    "description": "LLM-powered diff tool with full file operations (CREATE, DELETE, RENAME, MODIFY) and task management",
+    "version": "0.1.1",
     "publisher": "grzegorz-dev",
     "repository": {
         "type": "git",
@@ -25,7 +25,8 @@
         "code-modification",
         "claude",
         "gpt",
-        "refactoring"
+        "refactoring",
+        "task-management"
     ],
     "engines": {
         "vscode": "^1.74.0"
@@ -46,6 +47,26 @@
             {
                 "command": "llmDiff.insertDiff",
                 "title": "Inspector Diff: Apply Changes from LLM",
+                "category": "Inspector Diff"
+            },
+            {
+                "command": "llmDiff.startTask",
+                "title": "Start New Task",
+                "category": "Inspector Diff"
+            },
+            {
+                "command": "llmDiff.commitTask",
+                "title": "Commit Current Task",
+                "category": "Inspector Diff"
+            },
+            {
+                "command": "llmDiff.undoTask",
+                "title": "Undo Current Task",
+                "category": "Inspector Diff"
+            },
+            {
+                "command": "llmDiff.showTaskHistory",
+                "title": "Show Task History",
                 "category": "Inspector Diff"
             },
             {
@@ -72,7 +93,8 @@
             "activitybar": [
                 {
                     "id": "inspector-diff-panel",
-                    "title": "Inspector Diff"
+                    "title": "Inspector Diff",
+                    "icon": "$(diff)"
                 }
             ]
         },
@@ -115,6 +137,18 @@
                 {
                     "command": "llmDiff.insertDiff",
                     "when": "editorIsOpen"
+                },
+                {
+                    "command": "llmDiff.startTask"
+                },
+                {
+                    "command": "llmDiff.commitTask"
+                },
+                {
+                    "command": "llmDiff.undoTask"
+                },
+                {
+                    "command": "llmDiff.showTaskHistory"
                 }
             ]
         },
@@ -153,6 +187,16 @@
                     "type": "boolean",
                     "default": true,
                     "description": "Show files grouped by folders in tree view"
+                },
+                "inspectorDiff.autoStartTask": {
+                    "type": "boolean",
+                    "default": false,
+                    "description": "Automatically start a new task when applying changes"
+                },
+                "inspectorDiff.gitIntegration": {
+                    "type": "boolean",
+                    "default": true,
+                    "description": "Enable git integration for commit/undo tasks"
                 }
             }
         }

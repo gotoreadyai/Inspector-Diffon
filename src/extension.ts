@@ -1,141 +1,17 @@
 import * as vscode from 'vscode';
-import * as path from 'path';
-import * as fs from 'fs';
-import { LLMFileTreeProvider, FileItem } from './fileTreeProvider';
+import { LLMFileTreeProvider } from './fileTreeProvider';
+import { OperationsParser, OperationsExecutor } from './operations';
+import { TaskManager } from './taskManager';
+import { buildPrompt } from './promptBuilder';
 
-const outputChannel = vscode.window.createOutputChannel('LLM Diff');
+const outputChannel = vscode.window.createOutputChannel('Inspector Diff');
 
-function log(message: string) {
-  outputChannel.appendLine(`[${new Date().toLocaleTimeString()}] ${message}`);
-}
+let taskManager: TaskManager | null = null;
 
-async function buildContext(selected: vscode.Uri[]): Promise<{ content: string, paths: string[] }> {
-  const chunks: string[] = [];
-  const paths: string[] = [];
-  
-  for (const uri of selected) {
-    const doc = await vscode.workspace.openTextDocument(uri);
-    const relPath = vscode.workspace.asRelativePath(uri);
-    paths.push(relPath);
-    
-    const lang = doc.languageId || 'txt';
-    chunks.push(`// path: ${relPath}`);
-    chunks.push('```' + lang);
-    chunks.push(doc.getText());
-    chunks.push('```\n');
-  }
-  
-  return { content: chunks.join('\n'), paths };
-}
-
-function buildPrompt(task: string, context: string, filePaths: string[]) {
-  const examplePath = filePaths[0] || 'src/example.ts';
-  
-  return [
-    '# Zadanie',
-    task,
-    '',
-    '# ZWRÓĆ W FORMACIE:',
-    '```',
-    `<<<FILE: ${examplePath}>>>`,
-    '<<<SEARCH>>>',
-    '/* to jest plik do przetestowania rozszerzeia */',
-    '<<<REPLACE>>>',
-    '/* to jest plik do przetestowania rozszerzeia */',
-    'console.log("added")',
-    '<<<END>>>',
-    '```',
-    '',
-    'SEARCH = dokładna zawartość do znalezienia',
-    'REPLACE = czym zastąpić',
-    '',
-    '# Pliki:',
-    context,
-  ].join('\n');
-}
-
-interface SearchReplaceBlock {
-  file: string;
-  search: string;
-  replace: string;
-}
-
-function extractSearchReplace(text: string): SearchReplaceBlock[] | null {
-  const blocks: SearchReplaceBlock[] = [];
-  const regex = /<<<FILE:\s*(.+?)>>>\s*<<<SEARCH>>>([\s\S]*?)<<<REPLACE>>>([\s\S]*?)<<<END>>>/g;
-  
-  let match;
-  while ((match = regex.exec(text)) !== null) {
-    blocks.push({
-      file: match[1].trim(),
-      search: match[2].trim(),
-      replace: match[3].trim()
-    });
-    log(`Znaleziono blok dla pliku: ${match[1]}`);
-  }
-  
-  if (blocks.length === 0) {
-    log('Nie znaleziono bloków SEARCH/REPLACE');
-    return null;
-  }
-  
-  return blocks;
-}
-
-async function applySearchReplace(blocks: SearchReplaceBlock[]) {
-  const root = vscode.workspace.workspaceFolders?.[0]?.uri;
-  if (!root) {
-    vscode.window.showErrorMessage('Brak otwartego folderu');
-    return;
-  }
-
-  let successCount = 0;
-  let errorCount = 0;
-
-  for (const block of blocks) {
-    try {
-      const filePath = path.join(root.fsPath, block.file);
-      log(`Przetwarzam plik: ${filePath}`);
-      
-      if (!fs.existsSync(filePath)) {
-        log(`Plik nie istnieje: ${filePath}`);
-        errorCount++;
-        continue;
-      }
-      
-      const content = fs.readFileSync(filePath, 'utf8');
-      
-      if (!content.includes(block.search)) {
-        log(`Nie znaleziono tekstu do zamiany w pliku ${block.file}`);
-        log(`Szukano: [${block.search}]`);
-        errorCount++;
-        continue;
-      }
-      
-      const newContent = content.replace(block.search, block.replace);
-      fs.writeFileSync(filePath, newContent, 'utf8');
-      
-      log(`Zastosowano zmianę w pliku: ${block.file}`);
-      successCount++;
-      
-    } catch (e: any) {
-      log(`Błąd przy przetwarzaniu ${block.file}: ${e.message}`);
-      errorCount++;
-    }
-  }
-  
-  if (successCount > 0 && errorCount === 0) {
-    vscode.window.showInformationMessage(`Zastosowano ${successCount} zmian!`);
-  } else if (errorCount > 0) {
-    vscode.window.showWarningMessage(`Zastosowano ${successCount} zmian, ${errorCount} błędów - sprawdź Output`);
-    outputChannel.show();
-  }
-}
-
-async function insertDiffCmd() {
+async function applyDiffCommand() {
   const editor = vscode.window.activeTextEditor;
   if (!editor) {
-    vscode.window.showErrorMessage('Wklej odpowiedź z chatu i zaznacz ją');
+    vscode.window.showErrorMessage('Paste LLM response and select it');
     return;
   }
 
@@ -143,22 +19,72 @@ async function insertDiffCmd() {
     ? editor.document.getText(editor.selection)
     : editor.document.getText();
 
-  const blocks = extractSearchReplace(text);
+  // Parse all operations
+  const operations = OperationsParser.parse(text);
   
-  if (!blocks) {
-    vscode.window.showErrorMessage('Nie znaleziono bloków <<<FILE>>> <<<SEARCH>>> <<<REPLACE>>>');
+  if (operations.length === 0) {
+    vscode.window.showErrorMessage('No valid operation blocks found');
     outputChannel.show();
     return;
   }
 
-  await applySearchReplace(blocks);
+  // Ask for task name if no active task
+  if (!taskManager?.getCurrentTask()) {
+    const taskName = await vscode.window.showInputBox({
+      prompt: 'Enter task name (optional)',
+      placeHolder: 'e.g., Refactor auth module'
+    });
+    
+    if (taskName) {
+      taskManager?.startTask(taskName);
+    }
+  }
+
+  // Execute operations
+  const executor = new OperationsExecutor(outputChannel);
+  const { success, errors } = await executor.executeAll(operations);
+  
+  // Add to current task if exists
+  if (taskManager?.getCurrentTask()) {
+    taskManager.addOperations(operations);
+    const summary = taskManager.getTaskSummary();
+    vscode.window.setStatusBarMessage(summary, 5000);
+  }
+
+  // Show results
+  if (success > 0 && errors === 0) {
+    vscode.window.showInformationMessage(
+      `Applied ${success} operations successfully!`,
+      'Commit Task',
+      'Continue'
+    ).then(selection => {
+      if (selection === 'Commit Task' && taskManager) {
+        taskManager.commitTask();
+      }
+    });
+  } else if (errors > 0) {
+    vscode.window.showWarningMessage(
+      `Applied ${success} operations, ${errors} errors - check Output`,
+      'Undo Task',
+      'View Output'
+    ).then(selection => {
+      if (selection === 'Undo Task' && taskManager) {
+        taskManager.undoTask();
+      } else if (selection === 'View Output') {
+        outputChannel.show();
+      }
+    });
+  }
 }
 
 export function activate(context: vscode.ExtensionContext) {
   const rootPath = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
   
-  // TreeView tylko jeśli jest workspace
+  // Initialize task manager if workspace is open
   if (rootPath) {
+    taskManager = new TaskManager(rootPath, outputChannel);
+    
+    // Tree view for file selection
     const treeProvider = new LLMFileTreeProvider(rootPath);
     
     const treeView = vscode.window.createTreeView('llmDiffFiles', {
@@ -167,19 +93,19 @@ export function activate(context: vscode.ExtensionContext) {
       canSelectMany: false
     });
 
-    // Komendy dla TreeView
+    // Tree view commands
     context.subscriptions.push(
-      vscode.commands.registerCommand('llmDiff.toggleFile', (file: FileItem) =>
+      vscode.commands.registerCommand('llmDiff.toggleFile', (file) =>
         treeProvider.toggleFileSelection(file)
       ),
-      vscode.commands.registerCommand('llmDiff.onItemClicked', (file: FileItem) => {
+      vscode.commands.registerCommand('llmDiff.onItemClicked', (file) => {
         treeProvider.toggleFileSelection(file);
       }),
       vscode.commands.registerCommand('llmDiff.setGlobPattern', async () => {
         const pattern = await vscode.window.showInputBox({
-          prompt: 'Podaj wzorzec plików (glob pattern)',
+          prompt: 'Enter file pattern (glob)',
           value: 'src/**/*.{ts,tsx,js,jsx}',
-          placeHolder: 'np. src/**/*.ts'
+          placeHolder: 'e.g. src/**/*.ts'
         });
         if (pattern) {
           await treeProvider.setGlobPattern(pattern);
@@ -188,17 +114,16 @@ export function activate(context: vscode.ExtensionContext) {
       vscode.commands.registerCommand('llmDiff.generatePrompt', async () => {
         const selected = treeProvider.getSelectedFiles();
         if (selected.length === 0) {
-          vscode.window.showWarningMessage('Zaznacz pliki w panelu LLM Diff');
+          vscode.window.showWarningMessage('Select files in Inspector Diff panel');
           return;
         }
         
         const task = await vscode.window.showInputBox({
-          prompt: 'Opisz zadanie',
+          prompt: 'Describe the task',
         });
         if (!task) return;
 
-        const { content, paths } = await buildContext(selected);
-        const promptText = buildPrompt(task, content, paths);
+        const promptText = await buildPrompt(task, selected);
 
         const doc = await vscode.workspace.openTextDocument({
           language: 'markdown',
@@ -207,16 +132,54 @@ export function activate(context: vscode.ExtensionContext) {
         await vscode.window.showTextDocument(doc);
         await vscode.env.clipboard.writeText(promptText);
         
-        log(`Prompt skopiowany dla plików: ${paths.join(', ')}`);
-        vscode.window.showInformationMessage('Prompt skopiowany do schowka');
+        vscode.window.showInformationMessage('Prompt copied to clipboard');
       })
     );
   }
 
-  // Komenda Apply Diff
+  // Main commands
   context.subscriptions.push(
-    vscode.commands.registerCommand('llmDiff.insertDiff', insertDiffCmd)
+    vscode.commands.registerCommand('llmDiff.insertDiff', applyDiffCommand),
+    
+    vscode.commands.registerCommand('llmDiff.startTask', async () => {
+      if (!taskManager) return;
+      
+      const name = await vscode.window.showInputBox({
+        prompt: 'Enter task name',
+        placeHolder: 'e.g., Refactor auth module'
+      });
+      
+      if (name) {
+        taskManager.startTask(name);
+        vscode.window.showInformationMessage(`Started task: ${name}`);
+      }
+    }),
+    
+    vscode.commands.registerCommand('llmDiff.commitTask', () => {
+      taskManager?.commitTask();
+    }),
+    
+    vscode.commands.registerCommand('llmDiff.undoTask', () => {
+      taskManager?.undoTask();
+    }),
+    
+    vscode.commands.registerCommand('llmDiff.showTaskHistory', () => {
+      if (!taskManager) return;
+      
+      const tasks = taskManager.loadRecentTasks();
+      const items = tasks.map(t => ({
+        label: t.name,
+        description: `${t.status} - ${new Date(t.createdAt).toLocaleDateString()}`,
+        detail: `${t.operations.length} operations on ${t.affectedFiles.length} files`
+      }));
+      
+      vscode.window.showQuickPick(items, {
+        placeHolder: 'Recent tasks'
+      });
+    })
   );
 }
 
-export function deactivate() {}
+export function deactivate() {
+  outputChannel.dispose();
+}
