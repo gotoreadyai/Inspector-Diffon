@@ -1,16 +1,16 @@
 {
-    "name": "inspector-diff",
-    "displayName": "Inspector Diff",
+    "name": "inspector-diffon",
+    "displayName": "Inspector Diffon",
     "description": "LLM-powered diff tool with full file operations (CREATE, DELETE, RENAME, MODIFY) and task management",
-    "version": "0.1.3",
-    "publisher": "grzegorz-dev",
+    "version": "0.1.4",
+    "publisher": "gotoreadyai",
     "repository": {
         "type": "git",
         "url": "https://github.com/grzegorz/inspector-diff"
     },
     "author": {
         "name": "Grzegorz",
-        "email": "grzegorz@choosewise.com"
+        "email": "gotoreadyai@gmail.com"
     },
     "license": "MIT",
     "homepage": "https://github.com/grzegorz/inspector-diff#readme",
