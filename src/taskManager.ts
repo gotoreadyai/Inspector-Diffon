@@ -6,6 +6,7 @@ import { FileOperation } from './operations';
 export interface Task {
   id: string;
   name: string;
+  description?: string;
   createdAt: Date;
   operations: FileOperation[];
   status: 'pending' | 'applied' | 'committed' | 'undone';
@@ -29,10 +30,22 @@ export class TaskManager {
     }
   }
   
-  startTask(name: string): Task {
+  startTask(name: string, description?: string): Task {
+    // Check if task with this name already exists
+    const existing = this.findTaskByName(name);
+    if (existing) {
+      if (description && !existing.description) {
+        existing.description = description;
+        this.saveTask(existing);
+      }
+      this.currentTask = existing;
+      return existing;
+    }
+    
     const task: Task = {
       id: Date.now().toString(),
       name,
+      description,
       createdAt: new Date(),
       operations: [],
       status: 'pending',
@@ -42,6 +55,15 @@ export class TaskManager {
     this.currentTask = task;
     this.saveTask(task);
     return task;
+  }
+  
+  findTaskByName(name: string): Task | null {
+    const tasks = this.loadRecentTasks(100); // Load more to find by name
+    return tasks.find(t => t.name === name) || null;
+  }
+  
+  setCurrentTask(task: Task) {
+    this.currentTask = task;
   }
   
   getCurrentTask(): Task | null {

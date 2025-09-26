@@ -1,5 +1,5 @@
 /* 
- * To jest plik testowy nr 2 do sprawdzenia działania rozszerzenia.
- * Działa analogicznie do test1.ts, ale pozwala przetestować wiele plików.
+ * This is test file no. 2 to verify the extension functionality.
+ * Works similarly to test1.ts but allows testing multiple files.
  */
-console.log("added")
+

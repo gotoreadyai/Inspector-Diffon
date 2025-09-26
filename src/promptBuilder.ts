@@ -1,14 +1,18 @@
 import * as vscode from 'vscode';
 
-export async function buildPrompt(task: string, files: vscode.Uri[]): Promise<string> {
+export async function buildPrompt(taskDescription: string, files: vscode.Uri[], taskName: string): Promise<string> {
   const context = await buildContext(files);
   const examplePath = context.paths[0] || 'src/example.ts';
   
   return [
-    '# Task',
-    task,
+    '# Task: ' + taskName,
+    '',
+    '## Description:',
+    taskDescription,
     '',
     '# Output Format:',
+    '',
+    'IMPORTANT: Wrap your entire response in ``` code blocks',
     '',
     '## For creating new files:',
     '```',
@@ -43,6 +47,7 @@ export async function buildPrompt(task: string, files: vscode.Uri[]): Promise<st
     '- SEARCH must be exact text that exists in the file',
     '- REPLACE is what to replace it with',
     '- You can use multiple blocks for multiple operations',
+    '- Wrap everything in ``` code blocks',
     '',
     '# Files to work with:',
     context.content,
