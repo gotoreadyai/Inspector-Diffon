@@ -2,7 +2,7 @@
     "name": "vscode-llm-diff",
     "displayName": "LLM Diff Generator (Manual)",
     "description": "Prepare prompt with files for LLM and paste unified diff to save and apply patch.",
-    "version": "0.2.4",
+    "version": "0.2.24",
     "publisher": "gotoreadyai",
     "repository": {
         "type": "git",
@@ -24,11 +24,41 @@
         "commands": [
             {
                 "command": "llmDiff.requestDiff",
-                "title": "LLM Diff: request diff"
+                "title": "LLM Diff: 1. -> Request DIFF"
             },
             {
                 "command": "llmDiff.insertDiff",
-                "title": "LLM Diff: insert diff"
+                "title": "LLM Diff: 2. <- Insert DIFF"
+            }
+        ],
+        "menus": {
+            "commandPalette": [
+                {
+                    "command": "llmDiff.requestDiff",
+                    "group": "llm@1"
+                },
+                {
+                    "command": "llmDiff.insertDiff",
+                    "group": "llm@2"
+                }
+            ]
+        },
+        "keybindings": [
+            {
+                "command": "llmDiff.requestDiff",
+                "key": "ctrl+shift+.",
+                "win": "ctrl+shift+.",
+                "linux": "ctrl+shift+.",
+                "mac": "cmd+shift+.",
+                "when": "editorTextFocus && !editorReadonly"
+            },
+            {
+                "command": "llmDiff.insertDiff",
+                "key": "ctrl+shift+,",
+                "win": "ctrl+shift+,",
+                "linux": "ctrl+shift+,",
+                "mac": "cmd+shift+,",
+                "when": "editorTextFocus"
             }
         ]
     },
