@@ -1,4 +1,3 @@
-// path: src/taskInputPanel.ts
 import * as vscode from 'vscode';
 import { TaskManager } from './taskManager';
 
@@ -97,13 +96,26 @@ export class TaskInputPanel implements vscode.WebviewViewProvider {
   }
   input::placeholder, textarea::placeholder { color: var(--vscode-input-placeholderForeground); }
   button {
-    border: none;
+    border: 1px solid var(--vscode-button-border, transparent);
     border-radius: 2px;
     cursor: pointer;
     font-size: 11px;
   }
   button:hover:not(:disabled) { background: var(--vscode-button-hoverBackground); }
-  button:disabled { opacity: .55; cursor: not-allowed; }
+
+  /* WYRAŹNIEJSZY STAN DISABLED */
+  button:disabled {
+    opacity: 1; /* zachowaj czytelność tekstu */
+    color: var(--vscode-disabledForeground);
+    background:
+      repeating-linear-gradient(
+        45deg,
+        var(--vscode-input-background) 0 8px,
+        rgba(0,0,0,0.06) 8px 16px
+      );
+    border: 1px dashed var(--vscode-disabledForeground);
+    cursor: not-allowed;
+  }
 
   .btn-primary {
     width: 100%;
@@ -192,8 +204,11 @@ export class TaskInputPanel implements vscode.WebviewViewProvider {
   });
 
   function setAddEnabled(v){
-    addEnabled=v;
-    document.getElementById('taskAdd').disabled=!v;
+    addEnabled = v;
+    const btn = document.getElementById('taskAdd');
+    btn.disabled = !v;
+    // Czytelna podpowiedź, gdy przycisk jest nieaktywny
+    btn.title = v ? '' : 'Wybierz pliki w Explorerze, aby dodać';
   }
 
   document.addEventListener('keydown',(e)=>{
