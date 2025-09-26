@@ -2,7 +2,7 @@
     "name": "inspector-diffon",
     "displayName": "Inspector Diffon",
     "description": "LLM-powered diff tool with full file operations (CREATE, DELETE, RENAME, MODIFY) and task management",
-    "version": "0.1.23",
+    "version": "0.1.28",
     "publisher": "gotoreadyai",
     "repository": {
         "type": "git",
@@ -32,7 +32,16 @@
         "onCommand:llmDiff.addSelectedFilesToPrompt",
         "onCommand:llmDiff.endTask",
         "onCommand:llmDiff.onItemClicked",
-        "onCommand:llmDiff.notifySelectionChanged"
+        "onCommand:llmDiff.notifySelectionChanged",
+        "onCommand:llmDiff.applyFromClipboard",
+        "onCommand:llmDiff.applyFromActiveEditorAndClose",
+        "onCommand:llmDiff.selectAll",
+        "onCommand:llmDiff.deselectAll",
+        "onCommand:llmDiff.selectFolder",
+        "onCommand:llmDiff.setGlobPattern",
+        "onCommand:llmDiff.saveSelectionAsSet",
+        "onCommand:llmDiff.loadSelectionSet",
+        "onCommand:llmDiff.showTaskActions"
     ],
     "contributes": {
         "viewsContainers": {
@@ -54,6 +63,10 @@
                 {
                     "id": "llmDiffFiles",
                     "name": "Files"
+                },
+                {
+                    "id": "llmDiffTaskInfo",
+                    "name": "Task Info"
                 }
             ]
         },
@@ -81,6 +94,42 @@
             {
                 "command": "llmDiff.notifySelectionChanged",
                 "title": "Inspector Diffon: Notify Selection Changed"
+            },
+            {
+                "command": "llmDiff.applyFromClipboard",
+                "title": "Inspector Diffon: Apply Operations from Clipboard"
+            },
+            {
+                "command": "llmDiff.applyFromActiveEditorAndClose",
+                "title": "Inspector Diffon: Apply from Active Editor & Close"
+            },
+            {
+                "command": "llmDiff.selectAll",
+                "title": "Inspector Diffon: Select All Files"
+            },
+            {
+                "command": "llmDiff.deselectAll",
+                "title": "Inspector Diffon: Deselect All Files"
+            },
+            {
+                "command": "llmDiff.selectFolder",
+                "title": "Inspector Diffon: Select Folder…"
+            },
+            {
+                "command": "llmDiff.setGlobPattern",
+                "title": "Inspector Diffon: Set Glob Pattern…"
+            },
+            {
+                "command": "llmDiff.saveSelectionAsSet",
+                "title": "Inspector Diffon: Save Selection as Set…"
+            },
+            {
+                "command": "llmDiff.loadSelectionSet",
+                "title": "Inspector Diffon: Load Selection Set…"
+            },
+            {
+                "command": "llmDiff.showTaskActions",
+                "title": "Inspector Diffon: Show Task Actions"
             }
         ]
     },

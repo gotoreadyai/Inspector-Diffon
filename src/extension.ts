@@ -71,8 +71,12 @@ export function activate(context: vscode.ExtensionContext) {
   context.subscriptions.push(
     vscode.commands.registerCommand('llmDiff.selectAll', () => fileTree.selectAll()),
     vscode.commands.registerCommand('llmDiff.deselectAll', () => fileTree.deselectAll()),
-    vscode.commands.registerCommand('llmDiff.selectFolder', async () => {
-      const folder = await vscode.window.showInputBox({ prompt: 'Podaj ścieżkę folderu (relatywnie do workspace)', placeHolder: 'src/components' });
+    vscode.commands.registerCommand('llmDiff.selectFolder', async (folderArg?: string) => {
+      // Jeśli przyszła ścieżka z kliknięcia w drzewku — użyj jej; w innym wypadku pokaż input
+      const folder = folderArg ?? await vscode.window.showInputBox({
+        prompt: 'Podaj ścieżkę folderu (relatywnie do workspace)',
+        placeHolder: 'src/components'
+      });
       if (folder) fileTree.selectFolder(folder);
     }),
     vscode.commands.registerCommand('llmDiff.setGlobPattern', async () => {
@@ -155,6 +159,112 @@ export function activate(context: vscode.ExtensionContext) {
       if (!task) { vscode.window.showWarningMessage('Brak aktywnego zadania.'); return; }
       const prompt = await buildChangeRequestPrompt(task, continuation);
       await showPromptDoc('Change Request Prompt', prompt);
+    })
+  );
+
+  // Apply from clipboard
+  context.subscriptions.push(
+    vscode.commands.registerCommand('llmDiff.applyFromClipboard', async () => {
+      const { OperationsParser, OperationsExecutor } = await import('./operations');
+      const task = taskManager.getCurrentTask();
+      if (!task) {
+        vscode.window.showWarningMessage('Najpierw utwórz zadanie.');
+        return;
+      }
+
+      const raw = await vscode.env.clipboard.readText();
+      if (!raw?.trim()) {
+        vscode.window.showWarningMessage('Schowek jest pusty.');
+        return;
+      }
+
+      const m = raw.match(/```([\s\S]*?)```/);
+      const text = m ? m[1] : raw;
+
+      let ops;
+      try {
+        ops = OperationsParser.parse(text);
+      } catch (e: any) {
+        vscode.window.showErrorMessage(`Nie można sparsować operacji: ${e?.message ?? e}`);
+        return;
+      }
+
+      if (!ops.length) {
+        vscode.window.showWarningMessage('Nie znaleziono bloków operacji w schowku.');
+        return;
+      }
+
+      const executor = new OperationsExecutor(out);
+      const result = await executor.executeAll(ops);
+      if (result.applied.length) {
+        taskManager.addOperations(result.applied);
+      }
+      taskPanelProvider.updateView();
+      taskInfo.refresh();
+
+      if (result.errors === 0) {
+        vscode.window.showInformationMessage(`Zastosowano ${result.success} operacji.`);
+      } else {
+        vscode.window.showWarningMessage(`Operacje zakończone: ${result.success} sukcesów, ${result.errors} błędów. Sprawdź Output: "LLM Diff".`);
+      }
+    })
+  );
+
+  // 🔥 NOWE: Apply from Active Editor & Close
+  context.subscriptions.push(
+    vscode.commands.registerCommand('llmDiff.applyFromActiveEditorAndClose', async () => {
+      const { OperationsParser, OperationsExecutor } = await import('./operations');
+      const task = taskManager.getCurrentTask();
+      if (!task) {
+        vscode.window.showWarningMessage('Najpierw utwórz zadanie.');
+        return;
+      }
+
+      const editor = vscode.window.activeTextEditor;
+      if (!editor) {
+        vscode.window.showWarningMessage('Brak aktywnego edytora.');
+        return;
+      }
+
+      const raw = editor.document.getText();
+      if (!raw?.trim()) {
+        vscode.window.showWarningMessage('Aktywny dokument jest pusty.');
+        return;
+      }
+
+      const m = raw.match(/```([\s\S]*?)```/);
+      const text = m ? m[1] : raw;
+
+      let ops;
+      try {
+        ops = OperationsParser.parse(text);
+      } catch (e: any) {
+        vscode.window.showErrorMessage(`Nie można sparsować operacji: ${e?.message ?? e}`);
+        return;
+      }
+
+      if (!ops.length) {
+        vscode.window.showWarningMessage('Nie znaleziono bloków operacji w aktywnym edytorze.');
+        return;
+      }
+
+      const executor = new OperationsExecutor(out);
+      const result = await executor.executeAll(ops);
+      if (result.applied.length) {
+        taskManager.addOperations(result.applied);
+      }
+
+      taskPanelProvider.updateView();
+      taskInfo.refresh();
+
+      // Zamknij aktywne okno edytora
+      await vscode.commands.executeCommand('workbench.action.closeActiveEditor');
+
+      if (result.errors === 0) {
+        vscode.window.showInformationMessage(`Zastosowano ${result.success} operacji z aktywnego edytora.`);
+      } else {
+        vscode.window.showWarningMessage(`Operacje: ${result.success} OK, ${result.errors} błędów. Zajrzyj do Output: "LLM Diff".`);
+      }
     })
   );
 

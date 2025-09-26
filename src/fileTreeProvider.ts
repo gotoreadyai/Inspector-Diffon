@@ -17,10 +17,10 @@ export class FolderItem extends vscode.TreeItem {
     this.contextValue = 'folder';
     this.tooltip = folderPath;
 
-    // Kontekstowe menu: zaznacz folder
+    // Klik w etykietę folderu = toggle zaznaczenia jego plików
     this.command = {
       command: 'llmDiff.selectFolder',
-      title: 'Zaznacz folder',
+      title: 'Przełącz zaznaczenie folderu',
       arguments: [this.folderPath]
     };
   }
@@ -206,19 +206,44 @@ export class LLMFileTreeProvider implements vscode.TreeDataProvider<TreeElement>
     this.notifySelectionChanged();
   }
 
+  // TOGGLE: jeśli nie wszystkie w folderze są zaznaczone → zaznacz wszystkie; inaczej → odznacz wszystkie
   selectFolder(folderPath: string) {
-    let count = 0;
+    const affected: Array<[string, FileItem]> = [];
+    let total = 0;
+    let selected = 0;
+
     this.fileItems.forEach((item, filePath) => {
       const relativePath = vscode.workspace.asRelativePath(filePath);
-      if (relativePath.startsWith(folderPath + path.sep) || path.dirname(relativePath) === folderPath) {
-        item.isSelected = true;
-        item.iconPath = new vscode.ThemeIcon('check');
-        item.contextValue = 'fileSelected';
-        count++;
+      const inFolder =
+        relativePath.startsWith(folderPath + path.sep) ||
+        path.dirname(relativePath) === folderPath;
+
+      if (inFolder) {
+        total++;
+        if (item.isSelected) selected++;
+        affected.push([filePath, item]);
       }
     });
+
+    if (total === 0) {
+      vscode.window.showInformationMessage(`Brak plików w folderze „${folderPath}”.`);
+      return;
+    }
+
+    const shouldSelect = selected < total; // jeśli są jakieś nie-zaznaczone → zaznacz wszystkie
+
+    for (const [, item] of affected) {
+      item.isSelected = shouldSelect;
+      item.iconPath = new vscode.ThemeIcon(shouldSelect ? 'check' : 'circle-large-outline');
+      item.contextValue = shouldSelect ? 'fileSelected' : 'fileUnselected';
+    }
+
     this.refresh();
-    vscode.window.showInformationMessage(`Zaznaczono ${count} plików w folderze „${folderPath}”.`);
+    vscode.window.showInformationMessage(
+      shouldSelect
+        ? `Zaznaczono ${total} plików w folderze „${folderPath}”.`
+        : `Odznaczono ${total} plików w folderze „${folderPath}”.`
+    );
     this.notifySelectionChanged();
   }
 
@@ -277,3 +302,4 @@ export class LLMFileTreeProvider implements vscode.TreeDataProvider<TreeElement>
     }
   }
 }
+

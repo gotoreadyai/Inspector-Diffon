@@ -33,6 +33,9 @@ export class TaskInputPanel implements vscode.WebviewViewProvider {
         case 'task.sendChange':
           vscode.commands.executeCommand('llmDiff.sendChangeRequestPrompt', data.continuation || '');
           break;
+        case 'task.applyFromEditor':
+          vscode.commands.executeCommand('llmDiff.applyFromActiveEditorAndClose');
+          break;
         case 'task.end':
           vscode.commands.executeCommand('llmDiff.endTask');
           break;
@@ -103,16 +106,10 @@ export class TaskInputPanel implements vscode.WebviewViewProvider {
   }
   button:hover:not(:disabled) { background: var(--vscode-button-hoverBackground); }
 
-  /* WYRAŹNIEJSZY STAN DISABLED */
   button:disabled {
-    opacity: 1; /* zachowaj czytelność tekstu */
+    opacity: 1;
     color: var(--vscode-disabledForeground);
-    background:
-      repeating-linear-gradient(
-        45deg,
-        var(--vscode-input-background) 0 8px,
-        rgba(0,0,0,0.06) 8px 16px
-      );
+    background: repeating-linear-gradient(45deg, var(--vscode-input-background) 0 8px, rgba(0,0,0,0.06) 8px 16px);
     border: 1px dashed var(--vscode-disabledForeground);
     cursor: not-allowed;
   }
@@ -124,18 +121,10 @@ export class TaskInputPanel implements vscode.WebviewViewProvider {
     color: var(--vscode-button-foreground);
     font-weight: 600;
   }
+  .btn-small { padding: 4px 8px; font-size: 11px; }
+  .btn-danger { padding: 4px 8px; background: var(--vscode-button-dangerBackground, var(--vscode-errorForeground)); color: var(--vscode-button-dangerForeground, var(--vscode-editor-background)); font-size: 11px; }
 
-  .btn-small {
-    padding: 4px 8px;
-    font-size: 11px;
-  }
-
-  .btn-danger {
-    padding: 4px 8px;
-    background: var(--vscode-button-dangerBackground, var(--vscode-errorForeground));
-    color: var(--vscode-button-dangerForeground, var(--vscode-editor-background));
-    font-size: 11px;
-  }
+  .btn-row { display: flex; gap: 6px; }
 </style>
 </head>
 <body>
@@ -158,8 +147,12 @@ export class TaskInputPanel implements vscode.WebviewViewProvider {
         <button class="btn-danger" onclick="taskEnd()">Clear</button>
       </div>
     </div>
+
     <textarea id="cont" placeholder="Describe next change... (Ctrl+Enter to send)"></textarea>
-    <button class="btn-primary" style="margin-top:4px;" onclick="taskSend()">Send change</button>
+    <div class="btn-row" style="margin-top:4px;">
+      <button class="btn-primary" onclick="taskSend()">Send change</button>
+      <button class="btn-small" onclick="taskApplyFromEditor()" title="Zastosuj operacje z aktywnego edytora i zamknij kartę">Apply from editor & Close</button>
+    </div>
   </div>
 
 <script>
@@ -177,6 +170,9 @@ export class TaskInputPanel implements vscode.WebviewViewProvider {
     const c = document.getElementById('cont').value;
     vscode.postMessage({type:'task.sendChange', continuation:c || ''});
     document.getElementById('cont').value = '';
+  }
+  function taskApplyFromEditor(){
+    vscode.postMessage({type:'task.applyFromEditor'});
   }
   function taskEnd(){ vscode.postMessage({type:'task.end'}); }
 
@@ -207,7 +203,6 @@ export class TaskInputPanel implements vscode.WebviewViewProvider {
     addEnabled = v;
     const btn = document.getElementById('taskAdd');
     btn.disabled = !v;
-    // Czytelna podpowiedź, gdy przycisk jest nieaktywny
     btn.title = v ? '' : 'Wybierz pliki w Explorerze, aby dodać';
   }
 
