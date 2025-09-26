@@ -1,0 +1,43 @@
+{
+    "name": "vscode-llm-diff",
+    "displayName": "LLM Diff Generator (Manual)",
+    "description": "Przygotuj prompt z plików do LLM i wklej unified diff, aby zapisać i zastosować patch.",
+    "version": "0.2.2",
+    "publisher": "your-name",
+    "license": "MIT",
+    "engines": {
+        "vscode": "^1.85.0"
+    },
+    "categories": [
+        "Other"
+    ],
+    "activationEvents": [
+        "onCommand:llmDiff.requestDiff",
+        "onCommand:llmDiff.insertDiff"
+    ],
+    "main": "./out/extension.js",
+    "contributes": {
+        "commands": [
+            {
+                "command": "llmDiff.requestDiff",
+                "title": "LLM Diff: request diff"
+            },
+            {
+                "command": "llmDiff.insertDiff",
+                "title": "LLM Diff: insert diff"
+            }
+        ]
+    },
+    "scripts": {
+        "vscode:prepublish": "npm run compile",
+        "compile": "tsc -p ./",
+        "watch": "tsc -watch -p ./",
+        "package": "vsce package"
+    },
+    "devDependencies": {
+        "@types/node": "^18.19.0",
+        "@types/vscode": "^1.85.0",
+        "typescript": "^5.4.0",
+        "vsce": "^2.15.0"
+    }
+}
