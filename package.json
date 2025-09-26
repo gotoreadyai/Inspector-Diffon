@@ -2,7 +2,7 @@
     "name": "inspector-diffon",
     "displayName": "Inspector Diffon",
     "description": "LLM-powered diff tool with full file operations (CREATE, DELETE, RENAME, MODIFY) and task management",
-    "version": "0.1.28",
+    "version": "0.1.31",
     "publisher": "gotoreadyai",
     "repository": {
         "type": "git",

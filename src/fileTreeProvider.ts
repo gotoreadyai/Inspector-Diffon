@@ -13,6 +13,9 @@ export class FolderItem extends vscode.TreeItem {
   ) {
     super(folderName, collapsibleState);
 
+    // STABILNE ID → VS Code zachowuje stan ekspandowania przy refreshu
+    this.id = `folder:${folderPath}`;
+
     this.iconPath = vscode.ThemeIcon.Folder;
     this.contextValue = 'folder';
     this.tooltip = folderPath;
@@ -33,6 +36,9 @@ export class FileItem extends vscode.TreeItem {
     public isSelected: boolean = false
   ) {
     super(resourceUri, collapsibleState);
+
+    // STABILNE ID dla plików
+    this.id = `file:${resourceUri.fsPath}`;
 
     const fileName = path.basename(resourceUri.fsPath);
     this.label = fileName;
@@ -92,7 +98,7 @@ export class LLMFileTreeProvider implements vscode.TreeDataProvider<TreeElement>
     this.globPattern = pattern;
     await this.loadFiles();
     this.refresh();
-    vscode.window.showInformationMessage(`Wzorzec ustawiony: ${pattern}`);
+    vscode.window.setStatusBarMessage(`Wzorzec ustawiony: ${pattern}`, 2000);
   }
 
   private async loadFiles() {
@@ -130,7 +136,8 @@ export class LLMFileTreeProvider implements vscode.TreeDataProvider<TreeElement>
         currentStructure.files.push(item);
       }
 
-      vscode.window.showInformationMessage(`Znaleziono ${files.length} plików`);
+      // Status bar zamiast modala (mniej „mrygania” UI)
+      vscode.window.setStatusBarMessage(`Znaleziono ${files.length} plików`, 2000);
     } catch (error: any) {
       vscode.window.showErrorMessage(`Błąd ładowania plików: ${error?.message ?? String(error)}`);
     }
@@ -178,7 +185,8 @@ export class LLMFileTreeProvider implements vscode.TreeDataProvider<TreeElement>
 
   toggleFileSelection(file: FileItem) {
     file.toggleSelection();
-    this.refresh();
+    // Odśwież tylko zmieniony element → mniej migotania
+    this._onDidChangeTreeData.fire(file);
     const selected = this.getSelectedFiles();
     vscode.window.setStatusBarMessage(`Zaznaczono: ${selected.length} plików`, 1500);
     this.notifySelectionChanged();
@@ -236,13 +244,16 @@ export class LLMFileTreeProvider implements vscode.TreeDataProvider<TreeElement>
       item.isSelected = shouldSelect;
       item.iconPath = new vscode.ThemeIcon(shouldSelect ? 'check' : 'circle-large-outline');
       item.contextValue = shouldSelect ? 'fileSelected' : 'fileUnselected';
+      // precyzyjny, częściowy refresh zamiast pełnego
+      this._onDidChangeTreeData.fire(item);
     }
 
-    this.refresh();
-    vscode.window.showInformationMessage(
+    // Status bar zamiast modala (eliminuje skoki layoutu)
+    vscode.window.setStatusBarMessage(
       shouldSelect
-        ? `Zaznaczono ${total} plików w folderze „${folderPath}”.`
-        : `Odznaczono ${total} plików w folderze „${folderPath}”.`
+        ? `Zaznaczono ${total} plików w „${folderPath}”.`
+        : `Odznaczono ${total} plików w „${folderPath}”.`,
+      1500
     );
     this.notifySelectionChanged();
   }
@@ -302,4 +313,3 @@ export class LLMFileTreeProvider implements vscode.TreeDataProvider<TreeElement>
     }
   }
 }
-
