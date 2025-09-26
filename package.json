@@ -2,7 +2,7 @@
     "name": "inspector-diff",
     "displayName": "Inspector Diff",
     "description": "LLM-powered diff tool using SEARCH/REPLACE format for efficient code modifications",
-    "version": "0.0.8",
+    "version": "0.0.9",
     "publisher": "grzegorz-dev",
     "repository": {
         "type": "git",
@@ -44,29 +44,9 @@
     "contributes": {
         "commands": [
             {
-                "command": "llmDiff.requestDiff",
-                "title": "Inspector Diff: Generate Prompt from Files",
-                "category": "Inspector Diff"
-            },
-            {
                 "command": "llmDiff.insertDiff",
                 "title": "Inspector Diff: Apply Changes from LLM",
                 "category": "Inspector Diff"
-            },
-            {
-                "command": "llmDiff.refreshFiles",
-                "title": "Refresh Files",
-                "icon": "$(refresh)"
-            },
-            {
-                "command": "llmDiff.selectAll",
-                "title": "Select All Files",
-                "icon": "$(check-all)"
-            },
-            {
-                "command": "llmDiff.deselectAll",
-                "title": "Deselect All Files",
-                "icon": "$(close-all)"
             },
             {
                 "command": "llmDiff.toggleFile",
@@ -83,24 +63,9 @@
                 "icon": "$(play)"
             },
             {
-                "command": "llmDiff.saveSet",
-                "title": "Save File Set",
-                "icon": "$(save)"
-            },
-            {
-                "command": "llmDiff.loadSet",
-                "title": "Load File Set",
-                "icon": "$(folder-opened)"
-            },
-            {
                 "command": "llmDiff.setGlobPattern",
                 "title": "Set File Pattern",
                 "icon": "$(settings-gear)"
-            },
-            {
-                "command": "llmDiff.selectFolder",
-                "title": "Select All Files in Folder",
-                "icon": "$(check)"
             }
         ],
         "viewsContainers": {
@@ -124,62 +89,29 @@
         "viewsWelcome": [
             {
                 "view": "llmDiffFiles",
-                "contents": "No files found.\n[Set file pattern](command:llmDiff.setGlobPattern)\n[Generate prompt from selection](command:llmDiff.requestDiff)"
+                "contents": "No files found.\n[Set file pattern](command:llmDiff.setGlobPattern)"
             }
         ],
         "menus": {
             "view/title": [
                 {
-                    "command": "llmDiff.refreshFiles",
+                    "command": "llmDiff.generatePrompt",
                     "when": "view == llmDiffFiles",
                     "group": "navigation@1"
                 },
                 {
-                    "command": "llmDiff.selectAll",
-                    "when": "view == llmDiffFiles",
-                    "group": "navigation@2"
-                },
-                {
-                    "command": "llmDiff.deselectAll",
-                    "when": "view == llmDiffFiles",
-                    "group": "navigation@3"
-                },
-                {
-                    "command": "llmDiff.generatePrompt",
-                    "when": "view == llmDiffFiles",
-                    "group": "navigation@4"
-                },
-                {
                     "command": "llmDiff.setGlobPattern",
                     "when": "view == llmDiffFiles",
-                    "group": "2_settings@1"
-                },
-                {
-                    "command": "llmDiff.saveSet",
-                    "when": "view == llmDiffFiles",
-                    "group": "3_sets@1"
-                },
-                {
-                    "command": "llmDiff.loadSet",
-                    "when": "view == llmDiffFiles",
-                    "group": "3_sets@2"
+                    "group": "navigation@2"
                 }
             ],
             "view/item/context": [
                 {
                     "command": "llmDiff.toggleFile",
                     "when": "view == llmDiffFiles && viewItem =~ /file/"
-                },
-                {
-                    "command": "llmDiff.selectFolder",
-                    "when": "view == llmDiffFiles && viewItem == folder"
                 }
             ],
             "commandPalette": [
-                {
-                    "command": "llmDiff.requestDiff",
-                    "when": "workspaceFolderCount > 0"
-                },
                 {
                     "command": "llmDiff.insertDiff",
                     "when": "editorIsOpen"
@@ -188,15 +120,9 @@
         },
         "keybindings": [
             {
-                "command": "llmDiff.requestDiff",
-                "key": "ctrl+shift+d ctrl+shift+r",
-                "mac": "cmd+shift+d cmd+shift+r",
-                "when": "workspaceFolderCount > 0"
-            },
-            {
                 "command": "llmDiff.insertDiff",
-                "key": "ctrl+shift+d ctrl+shift+i",
-                "mac": "cmd+shift+d cmd+shift+i",
+                "key": "ctrl+shift+,",
+                "mac": "cmd+shift+,",
                 "when": "editorTextFocus"
             }
         ],

@@ -3,27 +3,10 @@ import * as path from 'path';
 import * as fs from 'fs';
 import { LLMFileTreeProvider, FileItem } from './fileTreeProvider';
 
-let LAST_PROMPT: string | null = null;
 const outputChannel = vscode.window.createOutputChannel('LLM Diff');
 
 function log(message: string) {
   outputChannel.appendLine(`[${new Date().toLocaleTimeString()}] ${message}`);
-}
-
-async function pickFiles(globPattern: string): Promise<vscode.Uri[]> {
-  const uris = await vscode.workspace.findFiles(
-    globPattern,
-    '**/{node_modules,dist,.next,.git,build,out,coverage}/**'
-  );
-  const picks = await vscode.window.showQuickPick(
-    uris.map(u => ({
-      label: vscode.workspace.asRelativePath(u),
-      description: u.fsPath,
-      picked: true,
-    })),
-    { canPickMany: true, title: 'Wybierz pliki do promptu' }
-  );
-  return picks ? picks.map(p => vscode.Uri.file(p.description!)) : [];
 }
 
 async function buildContext(selected: vscode.Uri[]): Promise<{ content: string, paths: string[] }> {
@@ -69,36 +52,6 @@ function buildPrompt(task: string, context: string, filePaths: string[]) {
     '# Pliki:',
     context,
   ].join('\n');
-}
-
-async function requestDiffCmd() {
-  const globInput = await vscode.window.showInputBox({
-    value: 'src/**/*.{ts,tsx,js,jsx}',
-    prompt: 'Podaj glob plików',
-  });
-  if (!globInput) return;
-
-  const files = await pickFiles(globInput);
-  if (!files.length) return;
-
-  const task = await vscode.window.showInputBox({
-    prompt: 'Opisz zadanie',
-  });
-  if (!task) return;
-
-  const { content, paths } = await buildContext(files);
-  const promptText = buildPrompt(task, content, paths);
-  LAST_PROMPT = promptText;
-
-  const doc = await vscode.workspace.openTextDocument({
-    language: 'markdown',
-    content: promptText,
-  });
-  await vscode.window.showTextDocument(doc);
-  await vscode.env.clipboard.writeText(promptText);
-  
-  log(`Prompt skopiowany dla plików: ${paths.join(', ')}`);
-  vscode.window.showInformationMessage('Prompt skopiowany do schowka');
 }
 
 interface SearchReplaceBlock {
@@ -155,7 +108,6 @@ async function applySearchReplace(blocks: SearchReplaceBlock[]) {
       if (!content.includes(block.search)) {
         log(`Nie znaleziono tekstu do zamiany w pliku ${block.file}`);
         log(`Szukano: [${block.search}]`);
-        log(`W pliku jest: [${content}]`);
         errorCount++;
         continue;
       }
@@ -207,7 +159,7 @@ export function activate(context: vscode.ExtensionContext) {
   
   // TreeView tylko jeśli jest workspace
   if (rootPath) {
-    const treeProvider = new LLMFileTreeProvider(rootPath, context);
+    const treeProvider = new LLMFileTreeProvider(rootPath);
     
     const treeView = vscode.window.createTreeView('llmDiffFiles', {
       treeDataProvider: treeProvider,
@@ -217,15 +169,6 @@ export function activate(context: vscode.ExtensionContext) {
 
     // Komendy dla TreeView
     context.subscriptions.push(
-      vscode.commands.registerCommand('llmDiff.refreshFiles', () => 
-        treeProvider.refresh()
-      ),
-      vscode.commands.registerCommand('llmDiff.selectAll', () => 
-        treeProvider.selectAll()
-      ),
-      vscode.commands.registerCommand('llmDiff.deselectAll', () => 
-        treeProvider.deselectAll()
-      ),
       vscode.commands.registerCommand('llmDiff.toggleFile', (file: FileItem) =>
         treeProvider.toggleFileSelection(file)
       ),
@@ -256,7 +199,6 @@ export function activate(context: vscode.ExtensionContext) {
 
         const { content, paths } = await buildContext(selected);
         const promptText = buildPrompt(task, content, paths);
-        LAST_PROMPT = promptText;
 
         const doc = await vscode.workspace.openTextDocument({
           language: 'markdown',
@@ -267,34 +209,12 @@ export function activate(context: vscode.ExtensionContext) {
         
         log(`Prompt skopiowany dla plików: ${paths.join(', ')}`);
         vscode.window.showInformationMessage('Prompt skopiowany do schowka');
-      }),
-      vscode.commands.registerCommand('llmDiff.saveSet', async () => {
-        const name = await vscode.window.showInputBox({
-          prompt: 'Nazwa zestawu plików'
-        });
-        if (name) {
-          treeProvider.saveCurrentSet(name);
-        }
-      }),
-      vscode.commands.registerCommand('llmDiff.loadSet', async () => {
-        const sets = treeProvider.getSavedSets();
-        if (sets.length === 0) {
-          vscode.window.showInformationMessage('Brak zapisanych zestawów');
-          return;
-        }
-        const selected = await vscode.window.showQuickPick(sets, {
-          placeHolder: 'Wybierz zestaw do wczytania'
-        });
-        if (selected) {
-          treeProvider.loadSet(selected);
-        }
       })
     );
   }
 
-  // Oryginalne komendy
+  // Komenda Apply Diff
   context.subscriptions.push(
-    vscode.commands.registerCommand('llmDiff.requestDiff', requestDiffCmd),
     vscode.commands.registerCommand('llmDiff.insertDiff', insertDiffCmd)
   );
 }
