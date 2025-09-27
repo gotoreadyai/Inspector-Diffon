@@ -2,70 +2,20 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
 
-// Typ dla elementu - może być folder lub plik
+// Typ dla elementu - może być folder lub plik  
 type TreeElement = FolderItem | FileItem;
 
-export class FolderItem extends vscode.TreeItem {
+export class FolderItem {
   constructor(
     public readonly folderName: string,
-    public readonly folderPath: string,
-    public readonly collapsibleState: vscode.TreeItemCollapsibleState
-  ) {
-    super(folderName, collapsibleState);
-
-    // STABILNE ID → VS Code zachowuje stan ekspandowania przy refreshu
-    this.id = `folder:${folderPath}`;
-
-    this.iconPath = vscode.ThemeIcon.Folder;
-    this.contextValue = 'folder';
-    this.tooltip = folderPath;
-
-    // Klik w etykietę folderu = toggle zaznaczenia jego plików
-    this.command = {
-      command: 'llmDiff.selectFolder',
-      title: 'Przełącz zaznaczenie folderu',
-      arguments: [this.folderPath]
-    };
-  }
+    public readonly folderPath: string
+  ) {}
 }
 
-export class FileItem extends vscode.TreeItem {
+export class FileItem {
   constructor(
-    public readonly resourceUri: vscode.Uri,
-    public readonly collapsibleState: vscode.TreeItemCollapsibleState,
-    public isSelected: boolean = false
-  ) {
-    super(resourceUri, collapsibleState);
-
-    // STABILNE ID dla plików
-    this.id = `file:${resourceUri.fsPath}`;
-
-    const fileName = path.basename(resourceUri.fsPath);
-    this.label = fileName;
-    this.tooltip = vscode.workspace.asRelativePath(resourceUri);
-
-    // Ikony
-    this.iconPath = new vscode.ThemeIcon(
-      isSelected ? 'check' : 'circle-large-outline'
-    );
-
-    // Klik = toggle
-    this.command = {
-      command: 'llmDiff.onItemClicked',
-      title: 'Przełącz zaznaczenie',
-      arguments: [this]
-    };
-
-    this.contextValue = isSelected ? 'fileSelected' : 'fileUnselected';
-  }
-
-  toggleSelection() {
-    this.isSelected = !this.isSelected;
-    this.iconPath = new vscode.ThemeIcon(
-      this.isSelected ? 'check' : 'circle-large-outline'
-    );
-    this.contextValue = this.isSelected ? 'fileSelected' : 'fileUnselected';
-  }
+    public readonly resourceUri: vscode.Uri
+  ) {}
 }
 
 interface FolderStructure {
@@ -82,6 +32,12 @@ export class LLMFileTreeProvider implements vscode.TreeDataProvider<TreeElement>
   private globPattern: string = 'src/**/*.{ts,tsx,js,jsx}';
   private savedSets: Map<string, string[]> = new Map();
   private context: vscode.ExtensionContext | undefined;
+  
+  // Trzymamy referencję do TreeView
+  private treeView: vscode.TreeView<TreeElement> | undefined;
+  
+  // Własny stan zaznaczenia - bo VSCode selection jest read-only
+  private selectedPaths: Set<string> = new Set();
 
   constructor(
     private workspaceRoot: string,
@@ -90,9 +46,26 @@ export class LLMFileTreeProvider implements vscode.TreeDataProvider<TreeElement>
     this.context = context;
     this.loadSavedSets();
     this.loadFiles();
+    
+    // Watcher na zmiany plików - automatyczny refresh
+    const watcher = vscode.workspace.createFileSystemWatcher(this.globPattern);
+    watcher.onDidCreate(() => this.loadFiles());
+    watcher.onDidDelete(() => this.loadFiles());
+    watcher.onDidChange(() => this.loadFiles());
+    
+    if (context) {
+      context.subscriptions.push(watcher);
+    }
   }
 
-  refresh(): void { this._onDidChangeTreeData.fire(); }
+  // Ustawiamy TreeView po utworzeniu
+  setTreeView(treeView: vscode.TreeView<TreeElement>) {
+    this.treeView = treeView;
+  }
+
+  async refresh(): Promise<void> { 
+    await this.loadFiles(); // Przeładuj listę plików i poczekaj
+  }
 
   async setGlobPattern(pattern: string) {
     this.globPattern = pattern;
@@ -109,14 +82,23 @@ export class LLMFileTreeProvider implements vscode.TreeDataProvider<TreeElement>
         1000
       );
 
+      // Zachowaj obecne zaznaczenia dla plików które nadal istnieją
+      const oldSelection = new Set(this.selectedPaths);
+      this.selectedPaths.clear();
+
       this.fileItems.clear();
       this.rootStructure = { folders: new Map(), files: [] };
 
       files.sort((a, b) => a.fsPath.localeCompare(b.fsPath));
 
       for (const file of files) {
-        const item = new FileItem(file, vscode.TreeItemCollapsibleState.None);
+        const item = new FileItem(file);
         this.fileItems.set(file.fsPath, item);
+
+        // Przywróć zaznaczenie jeśli plik był wcześniej zaznaczony
+        if (oldSelection.has(file.fsPath)) {
+          this.selectedPaths.add(file.fsPath);
+        }
 
         const relativePath = vscode.workspace.asRelativePath(file);
         const parts = relativePath.split(path.sep);
@@ -136,23 +118,59 @@ export class LLMFileTreeProvider implements vscode.TreeDataProvider<TreeElement>
         currentStructure.files.push(item);
       }
 
-      // Status bar zamiast modala (mniej „mrygania” UI)
       vscode.window.setStatusBarMessage(`Znaleziono ${files.length} plików`, 2000);
+      
+      // WAŻNE: Odśwież TreeView po załadowaniu plików
+      this._onDidChangeTreeData.fire();
+      
     } catch (error: any) {
       vscode.window.showErrorMessage(`Błąd ładowania plików: ${error?.message ?? String(error)}`);
     }
   }
 
-  getTreeItem(element: TreeElement): vscode.TreeItem { return element; }
+  getTreeItem(element: TreeElement): vscode.TreeItem {
+    if (element instanceof FolderItem) {
+      const item = new vscode.TreeItem(element.folderName, vscode.TreeItemCollapsibleState.Collapsed);
+      item.id = `folder:${element.folderPath}`;
+      item.iconPath = vscode.ThemeIcon.Folder;
+      item.contextValue = 'folder';
+      item.tooltip = element.folderPath;
+      // Folder nie ma komendy - tylko rozwija/zwija się
+      return item;
+    } else {
+      const item = new vscode.TreeItem(element.resourceUri);
+      item.id = `file:${element.resourceUri.fsPath}`;
+      
+      // Dodajemy zieloną kropkę na końcu nazwy jeśli plik jest zaznaczony
+      const fileName = path.basename(element.resourceUri.fsPath);
+      const isSelected = this.selectedPaths.has(element.resourceUri.fsPath);
+      item.label = isSelected ? `${fileName} 🟢` : fileName;
+      
+      item.tooltip = vscode.workspace.asRelativePath(element.resourceUri);
+      item.iconPath = vscode.ThemeIcon.File;
+      item.contextValue = isSelected ? 'fileSelected' : 'file';
+      
+      // Komenda do toggle pojedynczego pliku
+      item.command = {
+        command: 'llmDiff.onItemClicked',
+        title: 'Toggle selection',
+        arguments: [element.resourceUri.fsPath]
+      };
+      
+      return item;
+    }
+  }
 
   async getChildren(element?: TreeElement): Promise<TreeElement[]> {
     if (!this.workspaceRoot) return [];
 
     if (!element) {
-      if (this.fileItems.size === 0) { await this.loadFiles(); }
+      if (this.fileItems.size === 0) { 
+        await this.loadFiles(); 
+      }
       const result: TreeElement[] = [];
       this.rootStructure.folders.forEach((_s, folderName) => {
-        result.push(new FolderItem(folderName, folderName, vscode.TreeItemCollapsibleState.Collapsed));
+        result.push(new FolderItem(folderName, folderName));
       });
       result.push(...this.rootStructure.files);
       return result;
@@ -170,7 +188,7 @@ export class LLMFileTreeProvider implements vscode.TreeDataProvider<TreeElement>
       const result: TreeElement[] = [];
       currentStructure.folders.forEach((_s, folderName) => {
         const fullPath = path.join(element.folderPath, folderName);
-        result.push(new FolderItem(folderName, fullPath, vscode.TreeItemCollapsibleState.Collapsed));
+        result.push(new FolderItem(folderName, fullPath));
       });
       result.push(...currentStructure.files);
       return result;
@@ -179,47 +197,31 @@ export class LLMFileTreeProvider implements vscode.TreeDataProvider<TreeElement>
     return [];
   }
 
-  private notifySelectionChanged() {
-    vscode.commands.executeCommand('llmDiff.notifySelectionChanged');
-  }
-
-  toggleFileSelection(file: FileItem) {
-    file.toggleSelection();
-    // Odśwież tylko zmieniony element → mniej migotania
-    this._onDidChangeTreeData.fire(file);
-    const selected = this.getSelectedFiles();
-    vscode.window.setStatusBarMessage(`Zaznaczono: ${selected.length} plików`, 1500);
-    this.notifySelectionChanged();
-  }
+  // METODY SELECTION - używamy własnego stanu bo VSCode.selection jest read-only
 
   selectAll() {
-    this.fileItems.forEach(item => {
-      item.isSelected = true;
-      item.iconPath = new vscode.ThemeIcon('check');
-      item.contextValue = 'fileSelected';
+    // Zaznaczamy wszystkie pliki w naszym stanie
+    this.fileItems.forEach((item, path) => {
+      this.selectedPaths.add(path);
     });
-    this.refresh();
+    
     vscode.window.showInformationMessage(`Zaznaczono wszystkie ${this.fileItems.size} pliki.`);
+    this.refresh(); // Odświeżamy drzewo żeby pokazać zmiany
     this.notifySelectionChanged();
   }
 
   deselectAll() {
-    this.fileItems.forEach(item => {
-      item.isSelected = false;
-      item.iconPath = new vscode.ThemeIcon('circle-large-outline');
-      item.contextValue = 'fileUnselected';
-    });
-    this.refresh();
+    // Czyścimy nasz stan
+    this.selectedPaths.clear();
+    
     vscode.window.showInformationMessage('Odznaczono wszystkie pliki.');
+    this.refresh();
     this.notifySelectionChanged();
   }
 
-  // TOGGLE: jeśli nie wszystkie w folderze są zaznaczone → zaznacz wszystkie; inaczej → odznacz wszystkie
   selectFolder(folderPath: string) {
-    const affected: Array<[string, FileItem]> = [];
-    let total = 0;
-    let selected = 0;
-
+    const folderFiles: string[] = [];
+    
     this.fileItems.forEach((item, filePath) => {
       const relativePath = vscode.workspace.asRelativePath(filePath);
       const inFolder =
@@ -227,42 +229,79 @@ export class LLMFileTreeProvider implements vscode.TreeDataProvider<TreeElement>
         path.dirname(relativePath) === folderPath;
 
       if (inFolder) {
-        total++;
-        if (item.isSelected) selected++;
-        affected.push([filePath, item]);
+        folderFiles.push(filePath);
       }
     });
 
-    if (total === 0) {
-      vscode.window.showInformationMessage(`Brak plików w folderze „${folderPath}”.`);
+    if (folderFiles.length === 0) {
+      vscode.window.showInformationMessage(`Brak plików w folderze „${folderPath}".`);
       return;
     }
 
-    const shouldSelect = selected < total; // jeśli są jakieś nie-zaznaczone → zaznacz wszystkie
-
-    for (const [, item] of affected) {
-      item.isSelected = shouldSelect;
-      item.iconPath = new vscode.ThemeIcon(shouldSelect ? 'check' : 'circle-large-outline');
-      item.contextValue = shouldSelect ? 'fileSelected' : 'fileUnselected';
-      // precyzyjny, częściowy refresh zamiast pełnego
-      this._onDidChangeTreeData.fire(item);
+    // Sprawdzamy czy jakieś pliki z tego folderu są już zaznaczone
+    const selectedInFolder = folderFiles.filter(f => this.selectedPaths.has(f));
+    
+    // Toggle logic: jeśli nie wszystkie są zaznaczone → zaznacz wszystkie
+    const shouldSelect = selectedInFolder.length < folderFiles.length;
+    
+    if (shouldSelect) {
+      // Dodajemy pliki z folderu
+      folderFiles.forEach(f => this.selectedPaths.add(f));
+    } else {
+      // Usuwamy pliki z folderu
+      folderFiles.forEach(f => this.selectedPaths.delete(f));
     }
-
-    // Status bar zamiast modala (eliminuje skoki layoutu)
+    
     vscode.window.setStatusBarMessage(
       shouldSelect
-        ? `Zaznaczono ${total} plików w „${folderPath}”.`
-        : `Odznaczono ${total} plików w „${folderPath}”.`,
+        ? `Zaznaczono ${folderFiles.length} plików w „${folderPath}".`
+        : `Odznaczono ${folderFiles.length} plików w „${folderPath}".`,
       1500
     );
+    
+    this.refresh();
+    this.notifySelectionChanged();
+  }
+
+  toggleFileSelection(filePath: string) {
+    if (this.selectedPaths.has(filePath)) {
+      this.selectedPaths.delete(filePath);
+    } else {
+      this.selectedPaths.add(filePath);
+    }
+    this.refresh();
     this.notifySelectionChanged();
   }
 
   getSelectedFiles(): vscode.Uri[] {
-    return Array.from(this.fileItems.values())
-      .filter(item => item.isSelected)
-      .map(item => item.resourceUri);
+    // Połączenie: własny stan + natywna selekcja z TreeView (jeśli używamy canSelectMany)
+    const fromState = Array.from(this.selectedPaths)
+      .map(path => this.fileItems.get(path))
+      .filter(item => item !== undefined)
+      .map(item => item!.resourceUri);
+    
+    // Jeśli mamy TreeView z natywną selekcją, łączymy oba źródła
+    if (this.treeView) {
+      const fromTreeView = (this.treeView.selection as FileItem[])
+        .filter(item => item instanceof FileItem)
+        .map(item => item.resourceUri);
+      
+      // Deduplikacja - łączymy oba źródła
+      const combined = new Map<string, vscode.Uri>();
+      [...fromState, ...fromTreeView].forEach(uri => {
+        combined.set(uri.fsPath, uri);
+      });
+      return Array.from(combined.values());
+    }
+    
+    return fromState;
   }
+
+  private notifySelectionChanged() {
+    vscode.commands.executeCommand('llmDiff.notifySelectionChanged');
+  }
+
+  // ZARZĄDZANIE ZESTAWAMI
 
   saveCurrentSet(name: string) {
     const selected = this.getSelectedFiles().map(uri => uri.fsPath);
@@ -272,7 +311,7 @@ export class LLMFileTreeProvider implements vscode.TreeDataProvider<TreeElement>
     }
     this.savedSets.set(name, selected);
     this.persistSavedSets();
-    vscode.window.showInformationMessage(`Zapisano zestaw „${name}” (${selected.length} plików).`);
+    vscode.window.showInformationMessage(`Zapisano zestaw „${name}" (${selected.length} plików).`);
   }
 
   loadSet(name: string) {
@@ -281,23 +320,26 @@ export class LLMFileTreeProvider implements vscode.TreeDataProvider<TreeElement>
       vscode.window.showErrorMessage(`Nie znaleziono zestawu: ${name}`);
       return;
     }
-    this.deselectAll();
+    
+    // Czyścimy obecną selekcję i ładujemy zestaw
+    this.selectedPaths.clear();
     let loadedCount = 0;
+    
     paths.forEach(filePath => {
-      const item = this.fileItems.get(filePath);
-      if (item) {
-        item.isSelected = true;
-        item.iconPath = new vscode.ThemeIcon('check');
-        item.contextValue = 'fileSelected';
+      if (this.fileItems.has(filePath)) {
+        this.selectedPaths.add(filePath);
         loadedCount++;
       }
     });
+    
     this.refresh();
-    vscode.window.showInformationMessage(`Wczytano zestaw „${name}” (${loadedCount}/${paths.length} plików).`);
+    vscode.window.showInformationMessage(`Wczytano zestaw „${name}" (${loadedCount}/${paths.length} plików).`);
     this.notifySelectionChanged();
   }
 
-  getSavedSets(): string[] { return Array.from(this.savedSets.keys()); }
+  getSavedSets(): string[] { 
+    return Array.from(this.savedSets.keys()); 
+  }
 
   private persistSavedSets() {
     if (this.context) {
@@ -309,7 +351,9 @@ export class LLMFileTreeProvider implements vscode.TreeDataProvider<TreeElement>
   private loadSavedSets() {
     if (this.context) {
       const saved = this.context.workspaceState.get('llmDiff.savedSets') as [string, string[]][] | undefined;
-      if (saved) { this.savedSets = new Map(saved); }
+      if (saved) { 
+        this.savedSets = new Map(saved); 
+      }
     }
   }
 }

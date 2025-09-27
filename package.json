@@ -2,7 +2,7 @@
     "name": "inspector-diffon",
     "displayName": "Inspector Diffon",
     "description": "LLM-powered diff tool with full file operations (CREATE, DELETE, RENAME, MODIFY) and task management",
-    "version": "0.1.31",
+    "version": "0.1.43",
     "publisher": "gotoreadyai",
     "repository": {
         "type": "git",
@@ -27,6 +27,7 @@
     "main": "./out/extension.js",
     "activationEvents": [
         "onView:llmDiffTaskInput",
+        "onCommand:llmDiff.refresh",
         "onCommand:llmDiff.generatePromptFromPanel",
         "onCommand:llmDiff.sendChangeRequestPrompt",
         "onCommand:llmDiff.addSelectedFilesToPrompt",
@@ -72,6 +73,11 @@
         },
         "commands": [
             {
+                "command": "llmDiff.refresh",
+                "title": "Refresh Files",
+                "icon": "$(refresh)"
+            },
+            {
                 "command": "llmDiff.generatePromptFromPanel",
                 "title": "Inspector Diffon: Generate Initial Prompt"
             },
@@ -105,11 +111,13 @@
             },
             {
                 "command": "llmDiff.selectAll",
-                "title": "Inspector Diffon: Select All Files"
+                "title": "Select All",
+                "icon": "$(check-all)"
             },
             {
                 "command": "llmDiff.deselectAll",
-                "title": "Inspector Diffon: Deselect All Files"
+                "title": "Deselect All",
+                "icon": "$(circle-slash)"
             },
             {
                 "command": "llmDiff.selectFolder",
@@ -117,21 +125,58 @@
             },
             {
                 "command": "llmDiff.setGlobPattern",
-                "title": "Inspector Diffon: Set Glob Pattern…"
+                "title": "Set File Pattern",
+                "icon": "$(filter)"
             },
             {
                 "command": "llmDiff.saveSelectionAsSet",
-                "title": "Inspector Diffon: Save Selection as Set…"
+                "title": "Save Selection",
+                "icon": "$(save)"
             },
             {
                 "command": "llmDiff.loadSelectionSet",
-                "title": "Inspector Diffon: Load Selection Set…"
+                "title": "Load Selection",
+                "icon": "$(folder-opened)"
             },
             {
                 "command": "llmDiff.showTaskActions",
                 "title": "Inspector Diffon: Show Task Actions"
             }
-        ]
+        ],
+        "menus": {
+            "view/title": [
+                {
+                    "command": "llmDiff.refresh",
+                    "when": "view == llmDiffFiles",
+                    "group": "navigation@1"
+                },
+                {
+                    "command": "llmDiff.setGlobPattern",
+                    "when": "view == llmDiffFiles",
+                    "group": "navigation@2"
+                },
+                {
+                    "command": "llmDiff.selectAll",
+                    "when": "view == llmDiffFiles",
+                    "group": "1_selection@1"
+                },
+                {
+                    "command": "llmDiff.deselectAll",
+                    "when": "view == llmDiffFiles",
+                    "group": "1_selection@2"
+                },
+                {
+                    "command": "llmDiff.saveSelectionAsSet",
+                    "when": "view == llmDiffFiles",
+                    "group": "2_sets@1"
+                },
+                {
+                    "command": "llmDiff.loadSelectionSet",
+                    "when": "view == llmDiffFiles",
+                    "group": "2_sets@2"
+                }
+            ]
+        }
     },
     "scripts": {
         "vscode:prepublish": "tsc -p ./",

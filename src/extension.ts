@@ -26,7 +26,7 @@ export function activate(context: vscode.ExtensionContext) {
       const task = taskManager.startTask(name, description);
       taskPanelProvider.updateView();
       vscode.commands.executeCommand('llmDiff.notifySelectionChanged');
-      vscode.window.showInformationMessage(`Utworzono zadanie „${task.name}”.`);
+      vscode.window.showInformationMessage(`Utworzono zadanie „${task.name}".`);
       taskInfo.refresh();
     }
   );
@@ -38,10 +38,25 @@ export function activate(context: vscode.ExtensionContext) {
     })
   );
 
+  // KLUCZOWA ZMIANA: włączamy natywny multi-select
   const filesTreeView = vscode.window.createTreeView('llmDiffFiles', {
     treeDataProvider: fileTree,
-    showCollapseAll: true
+    showCollapseAll: true,
+    canSelectMany: true  // ← NATYWNE CHECKBOXY!
   });
+  
+  // Przekazujemy TreeView do providera żeby mógł zarządzać selekcją
+  fileTree.setTreeView(filesTreeView);
+  
+  // Nasłuchujemy na zmiany selekcji
+  filesTreeView.onDidChangeSelection(e => {
+    vscode.commands.executeCommand('llmDiff.notifySelectionChanged');
+    const count = e.selection.length;
+    if (count > 0) {
+      vscode.window.setStatusBarMessage(`Zaznaczono: ${count} plików`, 1500);
+    }
+  });
+  
   context.subscriptions.push(filesTreeView);
 
   const taskInfoView = vscode.window.createTreeView('llmDiffTaskInfo', {
@@ -60,19 +75,22 @@ export function activate(context: vscode.ExtensionContext) {
 
   // ========== KOMENDY ==========
 
-  // Toggle w drzewku
+  // Komenda do toggle pojedynczego pliku - teraz przyjmuje filePath jako string
   context.subscriptions.push(
-    vscode.commands.registerCommand('llmDiff.onItemClicked', (item) => {
-      fileTree.toggleFileSelection(item);
+    vscode.commands.registerCommand('llmDiff.onItemClicked', (filePath: string) => {
+      fileTree.toggleFileSelection(filePath);
     })
   );
 
   // Szybkie akcje selekcji
   context.subscriptions.push(
+    vscode.commands.registerCommand('llmDiff.refresh', async () => {
+      await fileTree.refresh();
+      vscode.window.setStatusBarMessage('Odświeżono listę plików', 2000);
+    }),
     vscode.commands.registerCommand('llmDiff.selectAll', () => fileTree.selectAll()),
     vscode.commands.registerCommand('llmDiff.deselectAll', () => fileTree.deselectAll()),
     vscode.commands.registerCommand('llmDiff.selectFolder', async (folderArg?: string) => {
-      // Jeśli przyszła ścieżka z kliknięcia w drzewku — użyj jej; w innym wypadku pokaż input
       const folder = folderArg ?? await vscode.window.showInputBox({
         prompt: 'Podaj ścieżkę folderu (relatywnie do workspace)',
         placeHolder: 'src/components'
@@ -101,7 +119,7 @@ export function activate(context: vscode.ExtensionContext) {
     })
   );
 
-  // Dodaj zaznaczone pliki do promptu — tylko w trybie „w zadaniu”
+  // Dodaj zaznaczone pliki do promptu — tylko w trybie „w zadaniu"
   context.subscriptions.push(
     vscode.commands.registerCommand('llmDiff.addSelectedFilesToPrompt', async () => {
       const task = taskManager.getCurrentTask();
@@ -210,7 +228,7 @@ export function activate(context: vscode.ExtensionContext) {
     })
   );
 
-  // 🔥 NOWE: Apply from Active Editor & Close
+  // Apply from Active Editor & Close
   context.subscriptions.push(
     vscode.commands.registerCommand('llmDiff.applyFromActiveEditorAndClose', async () => {
       const { OperationsParser, OperationsExecutor } = await import('./operations');
