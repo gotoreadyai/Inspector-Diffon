@@ -39,14 +39,13 @@ export class TaskInfoProvider implements vscode.TreeDataProvider<InfoNode> {
     return item;
   }
 
-  // Pokazujemy wszystkie informacje od razu w korzeniu (bez „dzieci”).
-  getChildren(_element?: InfoNode): InfoNode[] {
+  getChildren(element?: InfoNode): InfoNode[] {
     const task = this.taskManager?.getCurrentTask();
     
     if (!task) {
       return [{
         label: 'Brak aktywnego zadania',
-        description: 'Utwórz zadanie w panelu „Task”, a następnie dodaj pliki.',
+        description: 'Użyj terminala: /task "Nazwa" | opis',
         icon: 'info'
       }];
     }
