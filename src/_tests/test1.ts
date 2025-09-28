@@ -1,7 +1,8 @@
 /* 
- * To jest plik testowy nr 1 służący do weryfikacji funkcjonalności rozszerzenia.
- * Prosty przykład zawierający pojedyncze wywołanie console.log.
+ * This is test file #1 used to verify the extension functionality.
+ * A simple example containing a single console.log call.
  */
-// zmieniony komentarz testowy
+// changed test comment
 console.log("Hello, world!")
+console.log("Another log from test1")
     

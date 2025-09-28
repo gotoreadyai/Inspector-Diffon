@@ -62,6 +62,18 @@ export class TaskManager {
   getCurrentTask(): Task | null { return this.currentTask; }
   clearCurrentTask() { this.currentTask = null; }
 
+  /**
+   * Zwraca istniejący folder taska: .inspector-diff/tasks/<id>
+   * Tworzy go, jeśli nie istnieje.
+   */
+  getTaskDir(task?: Task): string {
+    const t = task ?? this.currentTask;
+    if (!t) throw new Error('Brak aktywnego zadania');
+    const folder = path.join(this.tasksDir, t.id);
+    if (!fs.existsSync(folder)) fs.mkdirSync(folder, { recursive: true });
+    return folder;
+  }
+
   addIncludedFiles(filePaths: string[]) {
     if (!this.currentTask) throw new Error('No active task');
     for (const f of filePaths) {

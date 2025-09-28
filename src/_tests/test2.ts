@@ -1,6 +1,7 @@
 /* 
- * To jest plik testowy nr 2 służący do weryfikacji funkcjonalności rozszerzenia.
- * Działa podobnie jak test1.ts, ale umożliwia testowanie wielu plików.
+ * This is test file #2 used to verify the extension functionality.
+ * It works similarly to test1.ts but allows testing multiple files.
  */
-console.log("Test 2 działa poprawnie")
+console.log("Test 2 works correctly")
+console.log("Another log from test2")
 
