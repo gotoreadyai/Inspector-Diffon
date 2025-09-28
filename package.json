@@ -2,7 +2,7 @@
     "name": "inspector-diffon",
     "displayName": "Inspector Diffon",
     "description": "LLM-powered diff tool with full file operations (CREATE, DELETE, RENAME, MODIFY) and task management",
-    "version": "0.1.53",
+    "version": "0.1.49",
     "publisher": "gotoreadyai",
     "repository": {
         "type": "git",
@@ -26,9 +26,7 @@
     "icon": "resources/icon.png",
     "main": "./out/extension.js",
     "activationEvents": [
-        "onView:llmDiffTaskInput",
         "onCommand:llmDiff.refresh",
-        "onCommand:llmDiff.generatePromptFromPanel",
         "onCommand:llmDiff.sendChangeRequestPrompt",
         "onCommand:llmDiff.addSelectedFilesToPrompt",
         "onCommand:llmDiff.endTask",
@@ -36,14 +34,15 @@
         "onCommand:llmDiff.notifySelectionChanged",
         "onCommand:llmDiff.applyFromClipboard",
         "onCommand:llmDiff.applyFromActiveEditorAndClose",
-        "onCommand:llmDiff.openTerminal",
         "onCommand:llmDiff.selectAll",
         "onCommand:llmDiff.deselectAll",
         "onCommand:llmDiff.selectFolder",
         "onCommand:llmDiff.setGlobPattern",
         "onCommand:llmDiff.saveSelectionAsSet",
         "onCommand:llmDiff.loadSelectionSet",
-        "onCommand:llmDiff.showTaskActions"
+        "onCommand:llmDiff.showTaskActions",
+        "onCommand:llmDiff.openTerminal",
+        "onCommand:llmDiff.createTask"
     ],
     "contributes": {
         "viewsContainers": {
@@ -57,11 +56,6 @@
         },
         "views": {
             "llmDiff": [
-                {
-                    "id": "llmDiffTaskInput",
-                    "name": "Task",
-                    "type": "webview"
-                },
                 {
                     "id": "llmDiffFiles",
                     "name": "Files"
@@ -77,10 +71,6 @@
                 "command": "llmDiff.refresh",
                 "title": "Refresh Files",
                 "icon": "$(refresh)"
-            },
-            {
-                "command": "llmDiff.generatePromptFromPanel",
-                "title": "Inspector Diffon: Generate Initial Prompt"
             },
             {
                 "command": "llmDiff.sendChangeRequestPrompt",
@@ -109,10 +99,6 @@
             {
                 "command": "llmDiff.applyFromActiveEditorAndClose",
                 "title": "Inspector Diffon: Apply from Active Editor & Close"
-            },
-            {
-                "command": "llmDiff.openTerminal",
-                "title": "Inspector Diffon: Open Terminal UI"
             },
             {
                 "command": "llmDiff.selectAll",
@@ -146,6 +132,14 @@
             {
                 "command": "llmDiff.showTaskActions",
                 "title": "Inspector Diffon: Show Task Actions"
+            },
+            {
+                "command": "llmDiff.openTerminal",
+                "title": "Inspector Diffon: Open Terminal UI"
+            },
+            {
+                "command": "llmDiff.createTask",
+                "title": "Inspector Diffon: Create Task"
             }
         ],
         "menus": {
@@ -179,6 +173,16 @@
                     "command": "llmDiff.loadSelectionSet",
                     "when": "view == llmDiffFiles",
                     "group": "2_sets@2"
+                },
+                {
+                    "command": "llmDiff.createTask",
+                    "when": "view == llmDiffTaskInfo",
+                    "group": "navigation@1"
+                },
+                {
+                    "command": "llmDiff.openTerminal",
+                    "when": "view == llmDiffTaskInfo",
+                    "group": "navigation@2"
                 }
             ]
         }

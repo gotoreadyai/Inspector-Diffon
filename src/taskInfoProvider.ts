@@ -39,17 +39,28 @@ export class TaskInfoProvider implements vscode.TreeDataProvider<InfoNode> {
     return item;
   }
 
-  getChildren(element?: InfoNode): InfoNode[] {
+  getChildren(_element?: InfoNode): InfoNode[] {
     const task = this.taskManager?.getCurrentTask();
     
     if (!task) {
-      return [{
-        label: 'Brak aktywnego zadania',
-        description: 'Użyj terminala: /task "Nazwa" | opis',
-        icon: 'info'
-      }];
+      // Brak zadania — pokaż CTA do utworzenia oraz skrót do Terminala
+      return [
+        {
+          label: 'Brak aktywnego zadania',
+          description: 'Utwórz nowe zadanie',
+          icon: 'info',
+          command: 'llmDiff.createTask'
+        },
+        {
+          label: 'Otwórz Terminal LLM Diff',
+          description: 'Pisanie promptów bezpośrednio w terminalu',
+          icon: 'terminal',
+          command: 'llmDiff.openTerminal'
+        }
+      ];
     }
 
+    // Prosty, jednopoziomowy widok z akcjami
     const nodes: InfoNode[] = [];
 
     nodes.push({
@@ -89,12 +100,13 @@ export class TaskInfoProvider implements vscode.TreeDataProvider<InfoNode> {
       });
     }
 
-    nodes.push({
-      label: 'Akcje',
-      description: 'Zatwierdź lub cofnij zmiany',
-      icon: 'play',
-      command: 'llmDiff.showTaskActions'
-    });
+    nodes.push(
+      { label: 'Dodaj zaznaczone pliki', description: 'Z Explorera do kontekstu', icon: 'diff-added', command: 'llmDiff.addSelectedFilesToPrompt' },
+      { label: 'Zastosuj z edytora i zamknij', description: 'Apply from editor & Close', icon: 'play', command: 'llmDiff.applyFromActiveEditorAndClose' },
+      { label: 'Akcje (commit/undo)', description: 'Zatwierdź lub cofnij zmiany', icon: 'git-commit', command: 'llmDiff.showTaskActions' },
+      { label: 'Zakończ zadanie', description: 'Wyczyść kontekst zadania', icon: 'trash', command: 'llmDiff.endTask' },
+      { label: 'Otwórz Terminal LLM Diff', description: 'Pisanie promptów bezpośrednio w terminalu', icon: 'terminal', command: 'llmDiff.openTerminal' }
+    );
 
     return nodes;
   }

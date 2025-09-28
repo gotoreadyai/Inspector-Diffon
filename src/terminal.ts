@@ -1,7 +1,6 @@
 // path: src/terminal.ts
 import * as vscode from 'vscode';
 import { TaskManager } from './taskManager';
-import { TaskInputPanel } from './taskInputPanel';
 
 export class LLMDiffTerminal implements vscode.Pseudoterminal {
   private writeEmitter = new vscode.EventEmitter<string>();
@@ -14,10 +13,7 @@ export class LLMDiffTerminal implements vscode.Pseudoterminal {
   private prompt = 'llm-diff> ';
   private term?: vscode.Terminal;
 
-  constructor(
-    private taskManager: TaskManager,
-    private taskPanel: TaskInputPanel,
-  ) {}
+  constructor(private taskManager: TaskManager) {}
 
   public attach(term: vscode.Terminal) {
     this.term = term;
@@ -63,10 +59,10 @@ export class LLMDiffTerminal implements vscode.Pseudoterminal {
     this.writeEmitter.fire((s + '\n').replace(/\n/g, '\r\n'));
   }
 
+  // Każdy wpis bez "/" jest traktowany jako prompt (alias /send).
   private async runCommand(line: string): Promise<void> {
     if (!line) return;
 
-    // Komendy zaczynają się od "/"
     if (line.startsWith('/')) {
       const [cmd, ...rest] = line.split(' ');
       const argStr = rest.join(' ').trim();
@@ -80,7 +76,7 @@ export class LLMDiffTerminal implements vscode.Pseudoterminal {
             '  /task "Nazwa" | opis...       — utwórz/ustaw zadanie',
             '  /send Tekst kontynuacji...    — wyślij Change Request Prompt',
             '  /add                          — dodaj zaznaczone pliki do kontekstu',
-            '  /apply                        — apply from active editor & close',
+            '  /apply                        — apply from active editor & Close',
             '  /applyc                       — apply from clipboard',
             '  /end                          — zakończ zadanie',
             '  /status                       — podsumowanie zadania',
@@ -88,12 +84,17 @@ export class LLMDiffTerminal implements vscode.Pseudoterminal {
           break;
 
         case '/task': {
-          const m = argStr.match(/^\s*"([^"]+)"\s*(?:\|\s*(.*))?$/) || argStr.match(/^\s*([^|]+?)\s*(?:\|\s*(.*))?$/);
+          // format: /task "Nazwa" | opcjonalny opis
+          const m =
+            argStr.match(/^\s*"([^"]+)"\s*(?:\|\s*(.*))?$/) ||
+            argStr.match(/^\s*([^|]+?)\s*(?:\|\s*(.*))?$/);
           const name = m?.[1]?.trim();
           const desc = m?.[2]?.trim();
-          if (!name) { this.println('Użycie: /task "Nazwa" | opis'); break; }
+          if (!name) {
+            this.println('Użycie: /task "Nazwa" | opis');
+            break;
+          }
           this.taskManager.startTask(name, desc);
-          this.taskPanel.updateView();
           await vscode.commands.executeCommand('llmDiff.notifySelectionChanged');
           this.println(`OK: aktywne zadanie „${name}”${desc ? ` — ${desc}` : ''}`);
           break;
@@ -137,7 +138,7 @@ export class LLMDiffTerminal implements vscode.Pseudoterminal {
         }
 
         default: {
-          // ⬇️ Każdy nierozpoznany wpis traktujemy jako prompt
+          // Fallback: każdy nierozpoznany wpis (nawet z prefiksem) → prompt
           const continuation = line.startsWith('/') ? line.slice(1).trim() : line;
           await vscode.commands.executeCommand('llmDiff.sendChangeRequestPrompt', continuation);
           this.println('Prompt wysłany (Change Request Prompt otwarty i skopiowany).');

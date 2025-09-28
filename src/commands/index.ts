@@ -1,3 +1,4 @@
+// path: src/commands/index.ts
 import * as vscode from 'vscode';
 import { LLMFileTreeProvider } from '../fileTreeProvider';
 import { TaskManager } from '../taskManager';
@@ -8,7 +9,6 @@ type CommandHandler = (...args: any[]) => void | Promise<void>;
 interface CommandContext {
   fileTree: LLMFileTreeProvider;
   taskManager: TaskManager;
-  taskPanel: any; // TaskInputPanel type
   taskInfo: any; // TaskInfoProvider type
   outputChannel: vscode.OutputChannel;
 }
@@ -111,7 +111,6 @@ export class CommandRegistry {
     const newRel = this.context.taskManager.getNewFiles(selectedRel);
     
     if (!newRel.length) {
-      this.context.taskPanel.updateSetAddFilesEnabled(false);
       vscode.window.showInformationMessage('Brak nowych plików do dodania (w zadaniu).');
       return;
     }
@@ -120,8 +119,6 @@ export class CommandRegistry {
     const prompt = await buildFilesContextPrompt(newUris, 'Te pliki zostają dodane do kontekstu rozmowy (zadanie).');
 
     this.context.taskManager.addIncludedFiles(newRel);
-    this.context.taskPanel.updateSetAddFilesEnabled(false);
-    this.context.taskPanel.updateView();
     this.context.taskInfo.refresh();
 
     await this.showPrompt('Files Context Prompt', prompt);
@@ -185,7 +182,6 @@ export class CommandRegistry {
       this.context.taskManager.addOperations(result.applied);
     }
 
-    this.context.taskPanel.updateView();
     this.context.taskInfo.refresh();
 
     if (source === 'editor') {
@@ -202,7 +198,6 @@ export class CommandRegistry {
 
   private async endTask() {
     this.context.taskManager.clearCurrentTask();
-    this.context.taskPanel.updateView();
     this.context.taskInfo.refresh();
     vscode.commands.executeCommand('llmDiff.notifySelectionChanged');
     vscode.window.showInformationMessage('Zadanie zakończone.');
@@ -227,7 +222,6 @@ export class CommandRegistry {
       case 'commit':
         try {
           await this.context.taskManager.commitTask();
-          this.context.taskPanel.updateView();
           this.context.taskInfo.refresh();
         } catch (e: any) {
           vscode.window.showErrorMessage(`Nie można zatwierdzić: ${e?.message ?? e}`);
@@ -236,7 +230,6 @@ export class CommandRegistry {
       case 'undo':
         try {
           await this.context.taskManager.undoTask();
-          this.context.taskPanel.updateView();
           this.context.taskInfo.refresh();
         } catch (e: any) {
           vscode.window.showErrorMessage(`Nie można cofnąć: ${e?.message ?? e}`);
@@ -249,16 +242,8 @@ export class CommandRegistry {
   }
 
   private async notifySelectionChanged() {
-    const task = this.context.taskManager.getCurrentTask();
-    const selected = this.context.fileTree.getSelectedFiles();
-    const selectedRel = selected.map((u: vscode.Uri) => vscode.workspace.asRelativePath(u));
-
-    if (!task) {
-      this.context.taskPanel.updateSetAddFilesEnabled(false);
-    } else {
-      const newRel = this.context.taskManager.getNewFiles(selectedRel);
-      this.context.taskPanel.updateSetAddFilesEnabled(newRel.length > 0);
-    }
+    // Brak panelu: nie musimy nic przełączać; pozostawiamy ewentualnie future hook.
+    return;
   }
 
   private async showPrompt(title: string, content: string) {
