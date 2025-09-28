@@ -3,8 +3,6 @@ import * as vscode from 'vscode';
 import { LLMFileTreeProvider } from '../fileTreeProvider';
 import { TaskManager } from '../taskManager';
 import { buildFilesContextPrompt, buildChangeRequestPrompt } from '../promptBuilder';
-import * as path from 'path';
-import * as fsp from 'fs/promises';
 
 type CommandHandler = (...args: any[]) => void | Promise<void>;
 
@@ -189,12 +187,10 @@ export class CommandRegistry {
     if (source === 'editor') {
       const res = await this.archiveAndFinalizeEditors();
       await vscode.commands.executeCommand('workbench.action.closeAllEditors');
-      if (res.archived > 0) {
+      if (res.saved || res.reverted) {
         const parts = [
-          `Archiwizacja: ${res.archived}`,
           res.saved ? `Zapisano: ${res.saved}` : '',
-          res.reverted ? `Zamknięto (untitled): ${res.reverted}` : '',
-          `→ ${res.folder}`
+          res.reverted ? `Zamknięto (bez zapisu): ${res.reverted}` : ''
         ].filter(Boolean).join(' | ');
         vscode.window.showInformationMessage(parts);
       }
@@ -259,64 +255,40 @@ export class CommandRegistry {
   }
 
   /**
-   * Archiwizuje wszystkie niezapisane karty do folderu taska i ustawia stan „zapisane”.
-   *  - Pliki z dysku: zapisuje do oryginalnej lokalizacji (document.save()).
-   *  - Untitled/inne schematy: po archiwizacji wykonuje revert & close (bez promptu).
+   * Finalizuje wszystkie niezapisane karty BEZ archiwizacji do folderu taska.
+   *  - Pliki z dysku: próba zapisu (document.save()); jeśli nie powiedzie się — zamknięcie bez zapisu.
+   *  - Untitled/inne schematy: zamknięcie bez zapisu (revert & close).
    * Zwraca statystyki do komunikatu.
    */
-  private async archiveAndFinalizeEditors(): Promise<{ archived: number; saved: number; reverted: number; folder: string }> {
+  private async archiveAndFinalizeEditors(): Promise<{ saved: number; reverted: number }> {
     const task = this.context.taskManager.getCurrentTask();
     if (!task) {
-      vscode.window.showWarningMessage('Brak aktywnego zadania — pomijam archiwizację kart.');
-      return { archived: 0, saved: 0, reverted: 0, folder: '' };
+      vscode.window.showWarningMessage('Brak aktywnego zadania — pomijam finalizację kart.');
+      return { saved: 0, reverted: 0 };
     }
 
     const docs = vscode.workspace.textDocuments.filter(d => d.isDirty);
-    if (docs.length === 0) return { archived: 0, saved: 0, reverted: 0, folder: '' };
+    if (docs.length === 0) return { saved: 0, reverted: 0 };
 
-    const taskRoot = this.context.taskManager.getTaskDir(task);
-    const stamp = new Date().toISOString().replace(/[:.]/g, '-');
-    const base = path.join(taskRoot, 'captures', stamp);
+    let saved = 0, reverted = 0;
 
-    let archived = 0, saved = 0, reverted = 0;
-
-    // 1) Archiwizacja
-    for (const doc of docs) {
-      let rel: string;
-      if (doc.uri.scheme === 'file') {
-        const relPath = vscode.workspace.asRelativePath(doc.uri, false);
-        rel = relPath || path.basename(doc.uri.fsPath);
-      } else {
-        const ext = doc.languageId ? `.${doc.languageId}` : '.txt';
-        rel = path.join('untitled', `${archived + 1}${ext}`);
-      }
-
-      const target = path.join(base, rel);
-      await fsp.mkdir(path.dirname(target), { recursive: true });
-      await fsp.writeFile(target, doc.getText(), 'utf8');
-      archived++;
-    }
-
-    // 2) Finalizacja (zapis albo zamknięcie bez pytania)
     for (const doc of docs) {
       try {
         if (doc.uri.scheme === 'file') {
-          const ok = await doc.save(); // po tym doc powinien być „czysty”
-          if (ok) saved++;
-          else {
-            // w razie niepowodzenia: bezpiecznie zamknij bez zapisu
+          const ok = await doc.save();
+          if (ok) {
+            saved++;
+          } else {
             await vscode.window.showTextDocument(doc, { preview: false, preserveFocus: false });
             await vscode.commands.executeCommand('workbench.action.revertAndCloseActiveEditor');
             reverted++;
           }
         } else {
-          // Untitled / inne schematy: nie wywołujemy Save As — po archiwizacji zamykamy bez promptu
           await vscode.window.showTextDocument(doc, { preview: false, preserveFocus: false });
           await vscode.commands.executeCommand('workbench.action.revertAndCloseActiveEditor');
           reverted++;
         }
       } catch {
-        // Awaryjnie zamknij bez zapisu (po archiwizacji mamy kopię)
         try {
           await vscode.window.showTextDocument(doc, { preview: false, preserveFocus: false });
           await vscode.commands.executeCommand('workbench.action.revertAndCloseActiveEditor');
@@ -325,7 +297,7 @@ export class CommandRegistry {
       }
     }
 
-    return { archived, saved, reverted, folder: base };
+    return { saved, reverted };
   }
 
   private async showPrompt(title: string, content: string) {
