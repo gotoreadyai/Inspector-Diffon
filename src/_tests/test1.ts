@@ -3,5 +3,5 @@
  * Prosty przykład zawierający pojedyncze wywołanie console.log.
  */
 // zmieniony komentarz testowy
-console.log("added")
+console.log("Hello, world!")
     

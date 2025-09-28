@@ -23,20 +23,20 @@ export class TaskManager {
   constructor(workspaceRoot: string, outputChannel: vscode.OutputChannel) {
     this.outputChannel = outputChannel;
     this.tasksDir = path.join(workspaceRoot, '.inspector-diff', 'tasks');
-    this.ensureTasksDir();
-  }
-
-  private ensureTasksDir() {
     if (!fs.existsSync(this.tasksDir)) fs.mkdirSync(this.tasksDir, { recursive: true });
   }
 
   startTask(name: string, description?: string): Task {
     const existing = this.findTaskByName(name);
     if (existing) {
-      if (description && !existing.description) { existing.description = description; this.saveTask(existing); }
+      if (description && !existing.description) {
+        existing.description = description;
+        this.saveTask(existing);
+      }
       this.currentTask = existing;
       return existing;
     }
+
     const task: Task = {
       id: Date.now().toString(),
       name,
@@ -47,12 +47,14 @@ export class TaskManager {
       affectedFiles: [],
       includedFiles: []
     };
-    this.currentTask = task; this.saveTask(task);
+
+    this.currentTask = task;
+    this.saveTask(task);
     return task;
   }
 
   findTaskByName(name: string): Task | null {
-    const tasks = this.loadRecentTasks(100);
+    const tasks = this.loadRecentTasks(200);
     return tasks.find(t => t.name === name) || null;
   }
 
@@ -62,8 +64,8 @@ export class TaskManager {
 
   addIncludedFiles(filePaths: string[]) {
     if (!this.currentTask) throw new Error('No active task');
-    for (const file of filePaths) {
-      if (!this.currentTask.includedFiles.includes(file)) this.currentTask.includedFiles.push(file);
+    for (const f of filePaths) {
+      if (!this.currentTask.includedFiles.includes(f)) this.currentTask.includedFiles.push(f);
     }
     this.saveTask(this.currentTask);
   }
@@ -96,7 +98,7 @@ export class TaskManager {
     if (!this.currentTask || this.currentTask.status !== 'applied') throw new Error('Brak zastosowanych zmian do zatwierdzenia.');
     const message = `Task: ${this.currentTask.name}`;
     const terminal = vscode.window.createTerminal('Git Commit');
-    terminal.sendText(`git add .`);
+    terminal.sendText('git add .');
     terminal.sendText(`git commit -m "${message.replace(/"/g, '\\"')}"`);
     terminal.show();
     this.currentTask.status = 'committed';
@@ -106,31 +108,70 @@ export class TaskManager {
 
   async undoTask(): Promise<void> {
     if (!this.currentTask || this.currentTask.status !== 'applied') throw new Error('Brak zastosowanych zmian do cofnięcia.');
-    const answer = await vscode.window.showWarningMessage(`Cofnąć wszystkie zmiany z zadania „${this.currentTask.name}”? (git reset --hard HEAD)`, 'Tak', 'Nie');
+    const answer = await vscode.window.showWarningMessage(
+      `Cofnąć wszystkie zmiany z zadania „${this.currentTask.name}”? (git reset --hard HEAD)`,
+      'Tak', 'Nie'
+    );
     if (answer !== 'Tak') return;
     const terminal = vscode.window.createTerminal('Git Reset');
-    terminal.sendText(`git reset --hard HEAD`);
+    terminal.sendText('git reset --hard HEAD');
     terminal.show();
     this.currentTask.status = 'undone';
     this.saveTask(this.currentTask);
     vscode.window.showInformationMessage(`Cofnięto zmiany z zadania „${this.currentTask.name}”.`);
   }
 
+  // Jedyny format: .inspector-diff/tasks/<id>/task-data.json
   private saveTask(task: Task) {
-    const taskFile = path.join(this.tasksDir, `${task.id}.json`);
-    if (!task.includedFiles) task.includedFiles = [];
-    fs.writeFileSync(taskFile, JSON.stringify(task, null, 2), 'utf8');
+    const folder = path.join(this.tasksDir, task.id);
+    if (!fs.existsSync(folder)) fs.mkdirSync(folder, { recursive: true });
+    const filePath = path.join(folder, 'task-data.json');
+
+    const toWrite = {
+      ...task,
+      createdAt: new Date(task.createdAt).toISOString(),
+      includedFiles: task.includedFiles ?? []
+    };
+
+    fs.writeFileSync(filePath, JSON.stringify(toWrite, null, 2), 'utf8');
   }
 
   loadRecentTasks(count: number = 10): Task[] {
     if (!fs.existsSync(this.tasksDir)) return [];
-    const files = fs.readdirSync(this.tasksDir).filter(f => f.endsWith('.json')).sort().reverse().slice(0, count);
-    return files.map(file => {
-      const content = fs.readFileSync(path.join(this.tasksDir, file), 'utf8');
-      const task = JSON.parse(content) as Task;
-      if (!task.includedFiles) task.includedFiles = [];
-      return task;
-    });
+
+    const ids = fs.readdirSync(this.tasksDir, { withFileTypes: true })
+      .filter(e => e.isDirectory())
+      .map(e => e.name);
+
+    const tasks: Task[] = [];
+    for (const id of ids) {
+      const filePath = path.join(this.tasksDir, id, 'task-data.json');
+      if (!fs.existsSync(filePath)) continue;
+
+      try {
+        const raw = JSON.parse(fs.readFileSync(filePath, 'utf8'));
+        const createdAt = raw.createdAt ? new Date(raw.createdAt) : new Date();
+        const statusValues = ['pending', 'applied', 'committed', 'undone'] as const;
+        const status = statusValues.includes(raw.status) ? raw.status : 'pending';
+
+        tasks.push({
+          id: String(raw.id ?? id),
+          name: String(raw.name ?? 'Unnamed Task'),
+          description: raw.description ? String(raw.description) : undefined,
+          createdAt,
+          operations: Array.isArray(raw.operations) ? raw.operations : [],
+          status,
+          affectedFiles: Array.isArray(raw.affectedFiles) ? raw.affectedFiles : [],
+          includedFiles: Array.isArray(raw.includedFiles) ? raw.includedFiles : []
+        });
+      } catch {
+        // pomiń uszkodzone wpisy
+      }
+    }
+
+    return tasks
+      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+      .slice(0, count);
   }
 
   getTaskSummary(): string {
@@ -139,8 +180,12 @@ export class TaskManager {
     for (const op of this.currentTask.operations) {
       opCounts.set(op.type, (opCounts.get(op.type) || 0) + 1);
     }
-    const summary = Array.from(opCounts.entries()).map(([type, count]) => `${count} × ${type}`).join(', ');
-    const filesInfo = this.currentTask.includedFiles.length > 0 ? ` | ${this.currentTask.includedFiles.length} plików w kontekście` : '';
+    const summary = Array.from(opCounts.entries())
+      .map(([type, count]) => `${count} × ${type}`)
+      .join(', ');
+    const filesInfo = this.currentTask.includedFiles.length > 0
+      ? ` | ${this.currentTask.includedFiles.length} plików w kontekście`
+      : '';
     return `Zadanie: ${this.currentTask.name} — ${summary} (${this.currentTask.status})${filesInfo}`;
   }
 }
