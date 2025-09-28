@@ -1,104 +1,96 @@
-// path: src/extension.ts
 import * as vscode from 'vscode';
-import { LLMFileTreeProvider } from './fileTreeProvider';
-import { TaskManager } from './taskManager';
-import { TaskInfoProvider } from './taskInfoProvider';
-import { CommandRegistry } from './commands';
-import { LLMDiffTerminal } from './terminal';
+import { PMExplorerProvider, TreeNode } from './projectTreeProvider';
+import { PMProject } from './types';
+import { PMStorage } from './storage';
+import { counts } from './utils';
+import { instantiateTemplate } from './templates';
+
+let statusItem: vscode.StatusBarItem;
+let treeView: vscode.TreeView<TreeNode>;
 
 export function activate(context: vscode.ExtensionContext) {
-  const root = vscode.workspace.workspaceFolders?.[0]?.uri;
-  if (!root) {
-    vscode.window.showErrorMessage('Otwórz folder roboczy, aby korzystać z LLM Diff.');
-    return;
-  }
+  const storage = new PMStorage(context);
+  const provider = new PMExplorerProvider(
+    () => storage.activeProject,
+    (p) => { storage.activeProject = p; updateStatusBar(p); }
+  );
 
-  // Core services
-  const outputChannel = vscode.window.createOutputChannel('LLM Diff');
-  const taskManager = new TaskManager(root.fsPath, outputChannel);
-  const fileTree = new LLMFileTreeProvider(root.fsPath, context);
-  const taskInfo = new TaskInfoProvider(taskManager);
+  const cmdToggle = vscode.commands.registerCommand('pm.toggleTaskDone', (node?: TreeNode) => {
+    if (node?.kind === 'task') provider.toggleTaskDone(node);
+  });
+  const cmdOpen = vscode.commands.registerCommand('pm.openProject', async () => {
+    const p = await storage.openFromFile();
+    if (!p) return;
+    storage.activeProject = p;
+    provider.refresh();
+    await revealProjectRoot(p);
+    vscode.window.setStatusBarMessage(`Wczytano projekt „${p.name}”.`, 2000);
+  });
+  const cmdStart = vscode.commands.registerCommand('pm.startFromTemplate', async (node?: any) => {
+    const templateName: string | undefined = node?.template?.name;
+    if (!templateName) return;
+    const name = (await vscode.window.showInputBox({
+      title: `Start z szablonu: ${templateName}`,
+      prompt: 'Nazwa projektu',
+      value: templateName
+    }))?.trim();
+    if (!name) return;
 
-  // Widoki: Files + Task Info (bez webview Task)
-  const views: vscode.Disposable[] = [];
+    const project: PMProject = instantiateTemplate(templateName);
+    project.name = name;
+    const savedPath = await storage.saveToWorkspaceFile(project);
 
-  const filesTreeView = vscode.window.createTreeView('llmDiffFiles', {
-    treeDataProvider: fileTree,
+    storage.activeProject = project;
+    provider.refresh();
+    await revealProjectRoot(project);
+
+    vscode.window.setStatusBarMessage(`Utworzono projekt „${name}” • ${savedPath}`, 3000);
+  });
+
+  context.subscriptions.push(cmdToggle, cmdOpen, cmdStart);
+
+  vscode.window.registerTreeDataProvider('pmExplorer', provider);
+  treeView = vscode.window.createTreeView('pmExplorer', {
+    treeDataProvider: provider,
     showCollapseAll: true,
-    canSelectMany: true
+    canSelectMany: false
   });
-  views.push(filesTreeView);
+  context.subscriptions.push(treeView);
 
-  const taskInfoView = vscode.window.createTreeView('llmDiffTaskInfo', {
-    treeDataProvider: taskInfo,
-    showCollapseAll: false
-  });
-  views.push(taskInfoView);
-
-  // Referencja do TreeView i reakcja na zmianę zaznaczenia
-  fileTree.setTreeView(filesTreeView);
-  filesTreeView.onDidChangeSelection(e => {
-    vscode.commands.executeCommand('llmDiff.notifySelectionChanged');
-    if (e.selection.length > 0) {
-      vscode.window.setStatusBarMessage(`Zaznaczono: ${e.selection.length} plików`, 1500);
-    }
+  treeView.onDidChangeSelection(e => {
+    const node = e.selection?.[0];
+    if (node?.kind === 'task') vscode.commands.executeCommand('pm.toggleTaskDone', node);
   });
 
-  // Rejestr komend
-  const commandRegistry = new CommandRegistry({
-    fileTree,
-    taskManager,
-    taskInfo,
-    outputChannel
-  });
-  commandRegistry.registerAll(context.subscriptions);
-
-  // Komenda do tworzenia zadania (zastępuje formularz z panelu)
-  context.subscriptions.push(
-    vscode.commands.registerCommand('llmDiff.createTask', async () => {
-      const name = (await vscode.window.showInputBox({
-        prompt: 'Nazwa zadania',
-        placeHolder: 'Task'
-      }))?.trim();
-      if (!name) return;
-
-      const description = (await vscode.window.showInputBox({
-        prompt: 'Opis (opcjonalnie)',
-        placeHolder: 'Krótki opis zmian'
-      }))?.trim();
-
-      taskManager.startTask(name, description);
-      taskInfo.refresh();
-      vscode.commands.executeCommand('llmDiff.notifySelectionChanged');
-      vscode.window.showInformationMessage(`Utworzono zadanie „${name}”.`);
-    })
-  );
-
-  // Terminal UI
-  let terminalInstance: vscode.Terminal | undefined;
-  let pty: LLMDiffTerminal | undefined;
-
-  const openTerminal = () => {
-    if (terminalInstance) {
-      terminalInstance.show(true);
-      return;
-    }
-    pty = new LLMDiffTerminal(taskManager);
-    terminalInstance = vscode.window.createTerminal({ name: 'LLM Diff', pty });
-    pty.attach?.(terminalInstance);
-    terminalInstance.show(true);
-  };
-
-  context.subscriptions.push(
-    vscode.commands.registerCommand('llmDiff.openTerminal', openTerminal),
-    { dispose: () => terminalInstance?.dispose() }
-  );
-
-  // Subskrypcje i inicjalizacja
-  context.subscriptions.push(...views, outputChannel);
-
-  taskInfo.refresh();
-  vscode.commands.executeCommand('llmDiff.notifySelectionChanged');
+  statusItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 100);
+  context.subscriptions.push(statusItem);
+  updateStatusBar(storage.activeProject);
 }
 
 export function deactivate() {}
+
+async function revealProjectRoot(project: PMProject) {
+  try {
+    const c = counts(project);
+    const element = {
+      kind: 'project',
+      label: project.name,
+      description: `${c.modules} modułów • ${c.total} zadań (⏳${c.todo} ✅${c.done})`,
+      project
+    } as any;
+    await treeView.reveal(element, { expand: true, focus: true, select: true });
+  } catch {}
+}
+
+function updateStatusBar(project: PMProject | null) {
+  if (!project) {
+    statusItem.text = '$(project) No Project';
+    statusItem.tooltip = 'Brak aktywnego projektu';
+    statusItem.show();
+    return;
+  }
+  const c = counts(project);
+  statusItem.text = `$(project) ${project.name}  $(library)${c.modules}  $(list-ordered)${c.total}  ⏳${c.todo} ✅${c.done}`;
+  statusItem.tooltip = project.description || 'Project';
+  statusItem.show();
+}

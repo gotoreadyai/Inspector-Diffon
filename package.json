@@ -1,239 +1,79 @@
 {
-    "name": "inspector-diffon",
-    "displayName": "Inspector Diffon",
-    "description": "LLM-powered diff tool with full file operations (CREATE, DELETE, RENAME, MODIFY) and task management",
-    "version": "0.1.61",
-    "publisher": "gotoreadyai",
-    "repository": {
-        "type": "git",
-        "url": "https://github.com/grzegorz/inspector-diff"
-    },
-    "author": {
-        "name": "Grzegorz",
-        "email": "gotoreadyai@gmail.com"
-    },
-    "license": "MIT",
-    "homepage": "https://github.com/grzegorz/inspector-diff#readme",
-    "bugs": {
-        "url": "https://github.com/grzegorz/inspector-diff/issues"
-    },
+    "name": "project-modules-tasks",
+    "displayName": "Project Modules & Tasks",
+    "description": "Explorer projektów na bazie szablonów. Status zadań: todo ⇄ done.",
+    "version": "0.8.3",
+    "publisher": "hildebrand-demo",
     "engines": {
         "vscode": "^1.90.0"
     },
     "categories": [
         "Other"
     ],
-    "icon": "resources/icon.png",
-    "main": "./out/extension.js",
     "activationEvents": [
-        "onCommand:llmDiff.refresh",
-        "onCommand:llmDiff.sendChangeRequestPrompt",
-        "onCommand:llmDiff.addSelectedFilesToPrompt",
-        "onCommand:llmDiff.endTask",
-        "onCommand:llmDiff.onItemClicked",
-        "onCommand:llmDiff.notifySelectionChanged",
-        "onCommand:llmDiff.applyFromClipboard",
-        "onCommand:llmDiff.applyFromActiveEditorAndClose",
-        "onCommand:llmDiff.selectAll",
-        "onCommand:llmDiff.deselectAll",
-        "onCommand:llmDiff.selectFolder",
-        "onCommand:llmDiff.setGlobPattern",
-        "onCommand:llmDiff.saveSelectionAsSet",
-        "onCommand:llmDiff.loadSelectionSet",
-        "onCommand:llmDiff.openTerminal",
-        "onCommand:llmDiff.createTask",
-        "onCommand:llmDiff.commitTask",
-        "onCommand:llmDiff.undoTask",
-        "onCommand:llmDiff.openOutput"
+        "onStartupFinished",
+        "onView:pmExplorer",
+        "onCommand:pm.openProject",
+        "onCommand:pm.startFromTemplate",
+        "onCommand:pm.toggleTaskDone"
     ],
+    "main": "./out/extension.js",
     "contributes": {
-        "viewsContainers": {
-            "activitybar": [
-                {
-                    "id": "llmDiff",
-                    "title": "LLM Diff",
-                    "icon": "resources/icon.svg"
-                }
-            ]
-        },
         "views": {
-            "llmDiff": [
+            "explorer": [
                 {
-                    "id": "llmDiffTaskInfo",
-                    "name": "Task Info"
-                },
-                {
-                    "id": "llmDiffFiles",
-                    "name": "Files"
+                    "id": "pmExplorer",
+                    "name": "Project Explorer"
                 }
             ]
         },
         "commands": [
             {
-                "command": "llmDiff.refresh",
-                "title": "Refresh Files",
-                "icon": "$(refresh)"
+                "command": "pm.openProject",
+                "title": "Otwórz projekt z pliku",
+                "icon": "$(new-folder)"
             },
             {
-                "command": "llmDiff.sendChangeRequestPrompt",
-                "title": "Inspector Diffon: Copy Change Request Prompt"
+                "command": "pm.startFromTemplate",
+                "title": "Start project from this template",
+                "icon": "$(rocket)"
             },
             {
-                "command": "llmDiff.addSelectedFilesToPrompt",
-                "title": "Inspector Diffon: Add Selected Files to Prompt",
-                "icon": "$(diff-added)"
-            },
-            {
-                "command": "llmDiff.endTask",
-                "title": "Inspector Diffon: End Task"
-            },
-            {
-                "command": "llmDiff.onItemClicked",
-                "title": "Inspector Diffon: Toggle File Selection"
-            },
-            {
-                "command": "llmDiff.notifySelectionChanged",
-                "title": "Inspector Diffon: Notify Selection Changed"
-            },
-            {
-                "command": "llmDiff.applyFromClipboard",
-                "title": "Inspector Diffon: Apply Operations from Clipboard"
-            },
-            {
-                "command": "llmDiff.applyFromActiveEditorAndClose",
-                "title": "Inspector Diffon: Apply from Active Editor & Close",
-                "icon": "$(play)"
-            },
-            {
-                "command": "llmDiff.selectAll",
-                "title": "Select All",
-                "icon": "$(check-all)"
-            },
-            {
-                "command": "llmDiff.deselectAll",
-                "title": "Deselect All",
-                "icon": "$(circle-slash)"
-            },
-            {
-                "command": "llmDiff.selectFolder",
-                "title": "Inspector Diffon: Select Folder…"
-            },
-            {
-                "command": "llmDiff.setGlobPattern",
-                "title": "Set File Pattern",
-                "icon": "$(filter)"
-            },
-            {
-                "command": "llmDiff.saveSelectionAsSet",
-                "title": "Save Selection",
-                "icon": "$(save)"
-            },
-            {
-                "command": "llmDiff.loadSelectionSet",
-                "title": "Load Selection",
-                "icon": "$(folder-opened)"
-            },
-            {
-                "command": "llmDiff.openTerminal",
-                "title": "Inspector Diffon: Open Inspector (Terminal UI)",
-                "icon": "$(terminal)"
-            },
-            {
-                "command": "llmDiff.createTask",
-                "title": "Inspector Diffon: Create Task",
-                "icon": "$(plus)"
-            },
-            {
-                "command": "llmDiff.commitTask",
-                "title": "Inspector Diffon: Commit Task",
-                "icon": "$(git-commit)"
-            },
-            {
-                "command": "llmDiff.undoTask",
-                "title": "Inspector Diffon: Undo Task (hard reset)",
-                "icon": "$(discard)"
-            },
-            {
-                "command": "llmDiff.openOutput",
-                "title": "Inspector Diffon: Open Output",
-                "icon": "$(output)"
+                "command": "pm.toggleTaskDone",
+                "title": "Toggle done",
+                "icon": "$(check)"
             }
         ],
         "menus": {
             "view/title": [
                 {
-                    "command": "llmDiff.addSelectedFilesToPrompt",
-                    "when": "view == llmDiffTaskInfo",
+                    "command": "pm.openProject",
+                    "when": "view == pmExplorer",
                     "group": "navigation@1"
-                },
-                {
-                    "command": "llmDiff.openTerminal",
-                    "when": "view == llmDiffTaskInfo",
-                    "group": "navigation@2"
-                },
-                {
-                    "command": "llmDiff.applyFromActiveEditorAndClose",
-                    "when": "view == llmDiffTaskInfo",
-                    "group": "navigation@3"
-                },
-                {
-                    "command": "llmDiff.openOutput",
-                    "when": "view == llmDiffTaskInfo",
-                    "group": "secondary@1"
-                },
-                {
-                    "command": "llmDiff.commitTask",
-                    "when": "view == llmDiffTaskInfo",
-                    "group": "secondary@2"
-                },
-                {
-                    "command": "llmDiff.undoTask",
-                    "when": "view == llmDiffTaskInfo",
-                    "group": "secondary@3"
-                },
-                {
-                    "command": "llmDiff.endTask",
-                    "when": "view == llmDiffTaskInfo",
-                    "group": "secondary@4"
                 }
             ],
-            "view/title?when=view==llmDiffFiles": [
+            "view/item/context": [
                 {
-                    "command": "llmDiff.refresh",
-                    "group": "navigation@1"
+                    "command": "pm.startFromTemplate",
+                    "when": "view == pmExplorer && viewItem == template",
+                    "group": "inline@1"
                 },
                 {
-                    "command": "llmDiff.setGlobPattern",
-                    "group": "navigation@2"
-                },
-                {
-                    "command": "llmDiff.selectAll",
-                    "group": "1_selection@1"
-                },
-                {
-                    "command": "llmDiff.deselectAll",
-                    "group": "1_selection@2"
-                },
-                {
-                    "command": "llmDiff.saveSelectionAsSet",
-                    "group": "2_sets@1"
-                },
-                {
-                    "command": "llmDiff.loadSelectionSet",
-                    "group": "2_sets@2"
+                    "command": "pm.toggleTaskDone",
+                    "when": "view == pmExplorer && viewItem == task",
+                    "group": "inline@2"
                 }
             ]
         }
     },
     "scripts": {
         "vscode:prepublish": "tsc -p ./",
-        "compile": "tsc -p ./",
-        "watch": "tsc -w -p ./",
-        "lint": "eslint src --ext ts"
+        "build": "tsc -p ./",
+        "watch": "tsc -w -p ./"
     },
     "devDependencies": {
-        "@types/node": "^20.11.30",
-        "typescript": "^5.4.5",
-        "eslint": "^8.57.0"
+        "@types/node": "^18.19.0",
+        "typescript": "^5.4.0",
+        "vsce": "^2.15.0"
     }
 }
