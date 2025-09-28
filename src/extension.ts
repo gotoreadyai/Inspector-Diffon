@@ -4,6 +4,7 @@ import { TaskManager } from './taskManager';
 import { TaskInputPanel } from './taskInputPanel';
 import { TaskInfoProvider } from './taskInfoProvider';
 import { CommandRegistry } from './commands';
+import { LLMDiffTerminal } from './terminal';
 
 export function activate(context: vscode.ExtensionContext) {
   const root = vscode.workspace.workspaceFolders?.[0]?.uri;
@@ -66,6 +67,27 @@ export function activate(context: vscode.ExtensionContext) {
   });
   
   commandRegistry.registerAll(context.subscriptions);
+
+  // Terminal UI
+  let terminalInstance: vscode.Terminal | undefined;
+  let pty: LLMDiffTerminal | undefined;
+
+  const openTerminal = () => {
+    if (terminalInstance) {
+      terminalInstance.show(true);
+      return;
+    }
+    pty = new LLMDiffTerminal(taskManager, taskPanel);
+    terminalInstance = vscode.window.createTerminal({ name: 'LLM Diff', pty });
+    // attach to pass terminal ref (opcjonalne)
+    pty.attach(terminalInstance);
+    terminalInstance.show(true);
+  };
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand('llmDiff.openTerminal', openTerminal),
+    { dispose: () => terminalInstance?.dispose() }
+  );
   
   // Add views to subscriptions
   context.subscriptions.push(...views, outputChannel);

@@ -2,7 +2,7 @@
     "name": "inspector-diffon",
     "displayName": "Inspector Diffon",
     "description": "LLM-powered diff tool with full file operations (CREATE, DELETE, RENAME, MODIFY) and task management",
-    "version": "0.1.48",
+    "version": "0.1.52",
     "publisher": "gotoreadyai",
     "repository": {
         "type": "git",
@@ -36,6 +36,7 @@
         "onCommand:llmDiff.notifySelectionChanged",
         "onCommand:llmDiff.applyFromClipboard",
         "onCommand:llmDiff.applyFromActiveEditorAndClose",
+        "onCommand:llmDiff.openTerminal",
         "onCommand:llmDiff.selectAll",
         "onCommand:llmDiff.deselectAll",
         "onCommand:llmDiff.selectFolder",
@@ -108,6 +109,10 @@
             {
                 "command": "llmDiff.applyFromActiveEditorAndClose",
                 "title": "Inspector Diffon: Apply from Active Editor & Close"
+            },
+            {
+                "command": "llmDiff.openTerminal",
+                "title": "Inspector Diffon: Open Terminal UI"
             },
             {
                 "command": "llmDiff.selectAll",
