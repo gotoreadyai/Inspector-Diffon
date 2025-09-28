@@ -17,6 +17,7 @@ export class LLMFileTreeProvider implements vscode.TreeDataProvider<FileNode> {
   private selectedPaths = new Set<string>();
   private savedSets = new Map<string, string[]>();
   private globPattern = 'src/**/*.{ts,tsx,js,jsx}';
+  private watcher?: vscode.FileSystemWatcher;
   private treeView?: vscode.TreeView<FileNode>;
 
   constructor(
@@ -29,11 +30,13 @@ export class LLMFileTreeProvider implements vscode.TreeDataProvider<FileNode> {
   }
 
   private setupFileWatcher() {
-    const watcher = vscode.workspace.createFileSystemWatcher(this.globPattern);
-    watcher.onDidCreate(() => this.loadFiles());
-    watcher.onDidDelete(() => this.loadFiles());
-    watcher.onDidChange(() => this.loadFiles());
-    this.context?.subscriptions.push(watcher);
+    // Przekonfiguruj watcher pod bieżący wzorzec
+    this.watcher?.dispose();
+    this.watcher = vscode.workspace.createFileSystemWatcher(this.globPattern);
+    this.watcher.onDidCreate(() => this.loadFiles());
+    this.watcher.onDidDelete(() => this.loadFiles());
+    this.watcher.onDidChange(() => this.loadFiles());
+    this.context?.subscriptions.push(this.watcher);
   }
 
   setTreeView(treeView: vscode.TreeView<FileNode>) {
@@ -46,6 +49,7 @@ export class LLMFileTreeProvider implements vscode.TreeDataProvider<FileNode> {
 
   async setGlobPattern(pattern: string) {
     this.globPattern = pattern;
+    this.setupFileWatcher(); // <- natychmiast przełącz watcher na nowy glob
     await this.loadFiles();
     vscode.window.setStatusBarMessage(`Wzorzec ustawiony: ${pattern}`, 2000);
   }

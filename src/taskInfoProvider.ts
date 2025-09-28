@@ -39,29 +39,26 @@ export class TaskInfoProvider implements vscode.TreeDataProvider<InfoNode> {
     return item;
   }
 
-  getChildren(element?: InfoNode): InfoNode[] {
+  // Pokazujemy wszystkie informacje od razu w korzeniu (bez „dzieci”).
+  getChildren(_element?: InfoNode): InfoNode[] {
     const task = this.taskManager?.getCurrentTask();
     
     if (!task) {
       return [{
         label: 'Brak aktywnego zadania',
-        description: 'Kliknij „Copy Init Files Prompt", aby zacząć',
+        description: 'Utwórz zadanie w panelu „Task”, a następnie dodaj pliki.',
         icon: 'info'
       }];
     }
 
-    // Return root-level task info
-    if (!element) {
-      return [{
-        label: `Zadanie: ${task.name}`,
-        description: `Status: ${task.status}`,
-        icon: 'git-branch'
-      }];
-    }
-
-    // Build child nodes
     const nodes: InfoNode[] = [];
-    
+
+    nodes.push({
+      label: `Zadanie: ${task.name}`,
+      description: `Status: ${task.status}`,
+      icon: 'git-branch'
+    });
+
     if ((task as any).description) {
       nodes.push({
         label: 'Opis',
@@ -75,11 +72,9 @@ export class TaskInfoProvider implements vscode.TreeDataProvider<InfoNode> {
       task.operations.forEach(op => {
         opCounts.set(op.type, (opCounts.get(op.type) || 0) + 1);
       });
-      
       const summary = Array.from(opCounts.entries())
         .map(([type, count]) => `${count} × ${type}`)
         .join(', ');
-        
       nodes.push({
         label: 'Operacje',
         description: summary,
