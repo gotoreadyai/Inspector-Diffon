@@ -1,3 +1,4 @@
+// path: src/taskInfoProvider.ts
 import * as vscode from 'vscode';
 import { TaskManager } from './taskManager';
 
@@ -35,7 +36,6 @@ export class TaskInfoProvider implements vscode.TreeDataProvider<InfoNode> {
         title: element.label
       };
     }
-    
     return item;
   }
 
@@ -43,7 +43,6 @@ export class TaskInfoProvider implements vscode.TreeDataProvider<InfoNode> {
     const task = this.taskManager?.getCurrentTask();
     
     if (!task) {
-      // Brak zadania — pokaż CTA do utworzenia oraz skrót do Terminala
       return [
         {
           label: 'Brak aktywnego zadania',
@@ -60,7 +59,6 @@ export class TaskInfoProvider implements vscode.TreeDataProvider<InfoNode> {
       ];
     }
 
-    // Prosty, jednopoziomowy widok z akcjami
     const nodes: InfoNode[] = [];
 
     nodes.push({
@@ -100,14 +98,15 @@ export class TaskInfoProvider implements vscode.TreeDataProvider<InfoNode> {
       });
     }
 
+    // UWAGA: ZAKOŃCZ ZADANIE usunięte z listy (dostępne w popupie ...)
     nodes.push(
       { label: 'Dodaj zaznaczone pliki', description: 'Z Explorera do kontekstu', icon: 'diff-added', command: 'llmDiff.addSelectedFilesToPrompt' },
+     
+      { label: 'Otwórz Terminal LLM Diff', description: 'Pisanie promptów bezpośrednio w terminalu', icon: 'terminal', command: 'llmDiff.openTerminal' },
       { label: 'Zastosuj z edytora i zamknij', description: 'Apply from editor & Close', icon: 'play', command: 'llmDiff.applyFromActiveEditorAndClose' },
-      { label: 'Akcje (commit/undo)', description: 'Zatwierdź lub cofnij zmiany', icon: 'git-commit', command: 'llmDiff.showTaskActions' },
-      { label: 'Zakończ zadanie', description: 'Wyczyść kontekst zadania', icon: 'trash', command: 'llmDiff.endTask' },
-      { label: 'Otwórz Terminal LLM Diff', description: 'Pisanie promptów bezpośrednio w terminalu', icon: 'terminal', command: 'llmDiff.openTerminal' }
     );
 
     return nodes;
   }
 }
+

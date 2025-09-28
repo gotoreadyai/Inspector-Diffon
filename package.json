@@ -2,7 +2,7 @@
     "name": "inspector-diffon",
     "displayName": "Inspector Diffon",
     "description": "LLM-powered diff tool with full file operations (CREATE, DELETE, RENAME, MODIFY) and task management",
-    "version": "0.1.59",
+    "version": "0.1.60",
     "publisher": "gotoreadyai",
     "repository": {
         "type": "git",
@@ -40,9 +40,11 @@
         "onCommand:llmDiff.setGlobPattern",
         "onCommand:llmDiff.saveSelectionAsSet",
         "onCommand:llmDiff.loadSelectionSet",
-        "onCommand:llmDiff.showTaskActions",
         "onCommand:llmDiff.openTerminal",
-        "onCommand:llmDiff.createTask"
+        "onCommand:llmDiff.createTask",
+        "onCommand:llmDiff.commitTask",
+        "onCommand:llmDiff.undoTask",
+        "onCommand:llmDiff.openOutput"
     ],
     "contributes": {
         "viewsContainers": {
@@ -78,7 +80,8 @@
             },
             {
                 "command": "llmDiff.addSelectedFilesToPrompt",
-                "title": "Inspector Diffon: Add Selected Files to Prompt"
+                "title": "Inspector Diffon: Add Selected Files to Prompt",
+                "icon": "$(diff-added)"
             },
             {
                 "command": "llmDiff.endTask",
@@ -98,7 +101,8 @@
             },
             {
                 "command": "llmDiff.applyFromActiveEditorAndClose",
-                "title": "Inspector Diffon: Apply from Active Editor & Close"
+                "title": "Inspector Diffon: Apply from Active Editor & Close",
+                "icon": "$(play)"
             },
             {
                 "command": "llmDiff.selectAll",
@@ -130,55 +134,35 @@
                 "icon": "$(folder-opened)"
             },
             {
-                "command": "llmDiff.showTaskActions",
-                "title": "Inspector Diffon: Show Task Actions",
-                "icon": "$(ellipsis)"
-            },
-            {
                 "command": "llmDiff.openTerminal",
-                "title": "Inspector Diffon: Open Terminal UI",
+                "title": "Inspector Diffon: Open Inspector (Terminal UI)",
                 "icon": "$(terminal)"
             },
             {
                 "command": "llmDiff.createTask",
                 "title": "Inspector Diffon: Create Task",
                 "icon": "$(plus)"
+            },
+            {
+                "command": "llmDiff.commitTask",
+                "title": "Inspector Diffon: Commit Task",
+                "icon": "$(git-commit)"
+            },
+            {
+                "command": "llmDiff.undoTask",
+                "title": "Inspector Diffon: Undo Task (hard reset)",
+                "icon": "$(discard)"
+            },
+            {
+                "command": "llmDiff.openOutput",
+                "title": "Inspector Diffon: Open Output",
+                "icon": "$(output)"
             }
         ],
         "menus": {
             "view/title": [
                 {
-                    "command": "llmDiff.refresh",
-                    "when": "view == llmDiffFiles",
-                    "group": "navigation@1"
-                },
-                {
-                    "command": "llmDiff.setGlobPattern",
-                    "when": "view == llmDiffFiles",
-                    "group": "navigation@2"
-                },
-                {
-                    "command": "llmDiff.selectAll",
-                    "when": "view == llmDiffFiles",
-                    "group": "1_selection@1"
-                },
-                {
-                    "command": "llmDiff.deselectAll",
-                    "when": "view == llmDiffFiles",
-                    "group": "1_selection@2"
-                },
-                {
-                    "command": "llmDiff.saveSelectionAsSet",
-                    "when": "view == llmDiffFiles",
-                    "group": "2_sets@1"
-                },
-                {
-                    "command": "llmDiff.loadSelectionSet",
-                    "when": "view == llmDiffFiles",
-                    "group": "2_sets@2"
-                },
-                {
-                    "command": "llmDiff.createTask",
+                    "command": "llmDiff.addSelectedFilesToPrompt",
                     "when": "view == llmDiffTaskInfo",
                     "group": "navigation@1"
                 },
@@ -188,9 +172,55 @@
                     "group": "navigation@2"
                 },
                 {
-                    "command": "llmDiff.showTaskActions",
+                    "command": "llmDiff.applyFromActiveEditorAndClose",
                     "when": "view == llmDiffTaskInfo",
                     "group": "navigation@3"
+                },
+                {
+                    "command": "llmDiff.openOutput",
+                    "when": "view == llmDiffTaskInfo",
+                    "group": "secondary@1"
+                },
+                {
+                    "command": "llmDiff.commitTask",
+                    "when": "view == llmDiffTaskInfo",
+                    "group": "secondary@2"
+                },
+                {
+                    "command": "llmDiff.undoTask",
+                    "when": "view == llmDiffTaskInfo",
+                    "group": "secondary@3"
+                },
+                {
+                    "command": "llmDiff.endTask",
+                    "when": "view == llmDiffTaskInfo",
+                    "group": "secondary@4"
+                }
+            ],
+            "view/title?when=view==llmDiffFiles": [
+                {
+                    "command": "llmDiff.refresh",
+                    "group": "navigation@1"
+                },
+                {
+                    "command": "llmDiff.setGlobPattern",
+                    "group": "navigation@2"
+                },
+                {
+                    "command": "llmDiff.selectAll",
+                    "group": "1_selection@1"
+                },
+                {
+                    "command": "llmDiff.deselectAll",
+                    "group": "1_selection@2"
+                },
+                {
+                    "command": "llmDiff.saveSelectionAsSet",
+                    "group": "2_sets@1"
+                },
+                {
+                    "command": "llmDiff.loadSelectionSet",
+                    "group": "2_sets@2"
                 }
             ]
         }

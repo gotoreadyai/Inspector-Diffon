@@ -77,8 +77,35 @@ export class CommandRegistry {
     this.register('applyFromClipboard', () => this.applyOperations('clipboard'));
     this.register('applyFromActiveEditorAndClose', () => this.applyOperations('editor'));
     this.register('endTask', () => this.endTask());
-    this.register('showTaskActions', () => this.showTaskActions());
+
+    // Dedykowane komendy do menu (3 kropki)
+    this.register('commitTask', async () => {
+      try {
+        await this.context.taskManager.commitTask();
+        this.context.taskInfo.refresh();
+      } catch (e: any) {
+        vscode.window.showErrorMessage(`Nie można zatwierdzić: ${e?.message ?? e}`);
+      }
+    });
+
+    this.register('undoTask', async () => {
+      try {
+        await this.context.taskManager.undoTask();
+        this.context.taskInfo.refresh();
+      } catch (e: any) {
+        vscode.window.showErrorMessage(`Nie można cofnąć: ${e?.message ?? e}`);
+      }
+    });
+
+    this.register('openOutput', () => {
+      this.context.outputChannel.show(true);
+    });
+
+    // Hook techniczny
     this.register('notifySelectionChanged', () => this.notifySelectionChanged());
+
+    // Zachowane (nieużywane w UI) dla kompatybilności
+    this.register('showTaskActions', () => this.showTaskActions());
   }
 
   private register(name: string, handler: CommandHandler) {
@@ -211,6 +238,7 @@ export class CommandRegistry {
     vscode.window.showInformationMessage('Zadanie zakończone.');
   }
 
+  // Pozostawione dla kompatybilności
   private async showTaskActions() {
     const task = this.context.taskManager.getCurrentTask();
     if (!task) {
@@ -250,16 +278,9 @@ export class CommandRegistry {
   }
 
   private async notifySelectionChanged() {
-    // Brak panelu: nie musimy nic przełączać; pozostawiamy ewentualnie future hook.
     return;
   }
 
-  /**
-   * Finalizuje wszystkie niezapisane karty BEZ archiwizacji do folderu taska.
-   *  - Pliki z dysku: próba zapisu (document.save()); jeśli nie powiedzie się — zamknięcie bez zapisu.
-   *  - Untitled/inne schematy: zamknięcie bez zapisu (revert & close).
-   * Zwraca statystyki do komunikatu.
-   */
   private async archiveAndFinalizeEditors(): Promise<{ saved: number; reverted: number }> {
     const task = this.context.taskManager.getCurrentTask();
     if (!task) {
@@ -307,3 +328,4 @@ export class CommandRegistry {
     vscode.window.showInformationMessage(`${title} — skopiowano do schowka.`);
   }
 }
+
