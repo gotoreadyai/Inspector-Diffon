@@ -2,7 +2,7 @@
     "name": "inspector-diffon",
     "displayName": "Inspector Diffon",
     "description": "LLM-powered diff tool with full file operations (CREATE, DELETE, RENAME, MODIFY) and task management",
-    "version": "0.1.57",
+    "version": "0.1.59",
     "publisher": "gotoreadyai",
     "repository": {
         "type": "git",
@@ -131,15 +131,18 @@
             },
             {
                 "command": "llmDiff.showTaskActions",
-                "title": "Inspector Diffon: Show Task Actions"
+                "title": "Inspector Diffon: Show Task Actions",
+                "icon": "$(ellipsis)"
             },
             {
                 "command": "llmDiff.openTerminal",
-                "title": "Inspector Diffon: Open Terminal UI"
+                "title": "Inspector Diffon: Open Terminal UI",
+                "icon": "$(terminal)"
             },
             {
                 "command": "llmDiff.createTask",
-                "title": "Inspector Diffon: Create Task"
+                "title": "Inspector Diffon: Create Task",
+                "icon": "$(plus)"
             }
         ],
         "menus": {
@@ -183,6 +186,11 @@
                     "command": "llmDiff.openTerminal",
                     "when": "view == llmDiffTaskInfo",
                     "group": "navigation@2"
+                },
+                {
+                    "command": "llmDiff.showTaskActions",
+                    "when": "view == llmDiffTaskInfo",
+                    "group": "navigation@3"
                 }
             ]
         }
