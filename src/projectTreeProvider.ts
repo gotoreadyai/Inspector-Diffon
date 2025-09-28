@@ -1,15 +1,41 @@
+// path: src/projectTreeProvider.ts
 import * as vscode from 'vscode';
 import { PMModule, PMProject, PMTask, NodeKind, TaskStatus } from './types';
 import { counts, ensureArrays } from './utils';
-import { PMTemplate, templates } from './templates';
+import { PMTemplate, loadTemplates } from './templates';
 
 export class PMExplorerProvider implements vscode.TreeDataProvider<TreeNode> {
   private _onDidChangeTreeData = new vscode.EventEmitter<TreeNode | void>();
   readonly onDidChangeTreeData = this._onDidChangeTreeData.event;
 
-  constructor(private getProject: () => PMProject | null, private setProject: (p: PMProject | null) => void) {}
+  private templates: PMTemplate[] = [];
+  private watcher: vscode.FileSystemWatcher | undefined;
+
+  constructor(
+    private getProject: () => PMProject | null,
+    private setProject: (p: PMProject | null) => Promise<void>
+  ) {
+    this.refreshTemplates();
+    this.setupTemplatesWatcher();
+  }
 
   refresh() { this._onDidChangeTreeData.fire(); }
+
+  private async refreshTemplates() {
+    this.templates = await loadTemplates();
+    this.refresh();
+  }
+
+  private setupTemplatesWatcher() {
+    const root = vscode.workspace.workspaceFolders?.[0]?.uri;
+    if (!root) return;
+    const pattern = new vscode.RelativePattern(root, '.inspector-diff/templates/*.json');
+    this.watcher?.dispose();
+    this.watcher = vscode.workspace.createFileSystemWatcher(pattern);
+    this.watcher.onDidCreate(() => this.refreshTemplates());
+    this.watcher.onDidChange(() => this.refreshTemplates());
+    this.watcher.onDidDelete(() => this.refreshTemplates());
+  }
 
   getTreeItem(element: TreeNode): vscode.TreeItem {
     const collapsible =
@@ -28,10 +54,12 @@ export class PMExplorerProvider implements vscode.TreeDataProvider<TreeNode> {
 
     if (element.kind === 'task') {
       item.iconPath = iconForTask(element.task!.status);
-      item.command = { command: 'pm.toggleTaskDone', title: 'Toggle done', arguments: [element] };
+      // Stabilny toggle — przez komendę (nie przez selection)
+      item.command = { command: 'pm.toggleTaskDone', title: 'Toggle', arguments: [element] };
     }
-    if (element.kind === 'template') item.iconPath = new vscode.ThemeIcon('rocket');
+    if (element.kind === 'template') item.iconPath = new vscode.ThemeIcon('file'); // brak rakiety tutaj
     if (element.kind === 'templatesRoot') item.iconPath = new vscode.ThemeIcon('symbol-structure');
+    if (element.kind === 'project') item.iconPath = new vscode.ThemeIcon('briefcase');
 
     return item;
   }
@@ -49,7 +77,7 @@ export class PMExplorerProvider implements vscode.TreeDataProvider<TreeNode> {
           kind: 'project',
           label: p.name,
           description: `${c.modules} modułów • ${c.total} zadań (⏳${c.todo} ✅${c.done})`,
-          icon: new vscode.ThemeIcon('project'),
+          icon: new vscode.ThemeIcon('briefcase'),
           project: p,
           tooltip: p.description || ''
         });
@@ -57,8 +85,7 @@ export class PMExplorerProvider implements vscode.TreeDataProvider<TreeNode> {
       return nodes;
     }
 
-    if (element.kind === 'templatesRoot') return templates.map(nodeTemplate);
-
+    if (element.kind === 'templatesRoot') return this.templates.map(nodeTemplate);
     if (element.kind === 'template') {
       return element.template!.modules.map(m => ({
         kind: 'templateModule' as const,
@@ -68,7 +95,6 @@ export class PMExplorerProvider implements vscode.TreeDataProvider<TreeNode> {
         template: element.template
       }));
     }
-
     if (element.kind === 'templateModule') {
       const mod = element.template!.modules.find(m => m.name === element.label);
       if (!mod) return [];
@@ -87,9 +113,9 @@ export class PMExplorerProvider implements vscode.TreeDataProvider<TreeNode> {
     return [];
   }
 
-  toggleTaskDone = (node: TreeNode) => {
+  // Zapis do pliku dzieje się w przekazanym setterze (extension.ts)
+  toggleTaskDone = async (node: TreeNode) => {
     if (node.kind !== 'task') return;
-
     const task = node.task!;
     const goingToDone = task.status !== 'done';
 
@@ -107,7 +133,7 @@ export class PMExplorerProvider implements vscode.TreeDataProvider<TreeNode> {
     }
 
     const p = this.getProject(); if (!p) return;
-    this.setProject(p);
+    await this.setProject(p);
     this.refresh();
   };
 }
@@ -131,7 +157,8 @@ function nodeTask(t: PMTask): TreeNode {
   return { kind: 'task', label: t.title, description: t.status, tooltip: t.description, icon: iconForTask(t.status), task: t };
 }
 function nodeTemplate(tpl: PMTemplate): TreeNode {
-  return { kind: 'template', label: tpl.name, description: tpl.description, icon: new vscode.ThemeIcon('rocket'), template: tpl };
+  // contextValue='template' → rakieta pojawia się jako action inline (menu definiowane w package.json)
+  return { kind: 'template', label: tpl.name, description: tpl.description, icon: new vscode.ThemeIcon('file'), template: tpl, tooltip: tpl.description };
 }
 function iconForTask(status: TaskStatus) {
   return status === 'done'

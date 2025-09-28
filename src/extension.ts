@@ -1,54 +1,59 @@
+// path: src/extension.ts
 import * as vscode from 'vscode';
 import { PMExplorerProvider, TreeNode } from './projectTreeProvider';
 import { PMProject } from './types';
 import { PMStorage } from './storage';
 import { counts } from './utils';
-import { instantiateTemplate } from './templates';
+import { PMTemplate, instantiateTemplate } from './templates';
 
 let statusItem: vscode.StatusBarItem;
 let treeView: vscode.TreeView<TreeNode>;
 
-export function activate(context: vscode.ExtensionContext) {
+export async function activate(context: vscode.ExtensionContext) {
   const storage = new PMStorage(context);
+  await storage.loadLastProjectIfAny();
+
   const provider = new PMExplorerProvider(
     () => storage.activeProject,
-    (p) => { storage.activeProject = p; updateStatusBar(p); }
+    async (p) => { storage.activeProject = p; await storage.saveActive(); updateStatusBar(p); }
   );
 
-  const cmdToggle = vscode.commands.registerCommand('pm.toggleTaskDone', (node?: TreeNode) => {
-    if (node?.kind === 'task') provider.toggleTaskDone(node);
+  // Komendy MUSZĄ być zarejestrowane przed tworzeniem widoku
+  const cmdToggle = vscode.commands.registerCommand('pm.toggleTaskDone', async (node?: TreeNode) => {
+    if (node?.kind === 'task') await provider.toggleTaskDone(node);
   });
   const cmdOpen = vscode.commands.registerCommand('pm.openProject', async () => {
     const p = await storage.openFromFile();
     if (!p) return;
-    storage.activeProject = p;
     provider.refresh();
     await revealProjectRoot(p);
+    updateStatusBar(storage.activeProject);
     vscode.window.setStatusBarMessage(`Wczytano projekt „${p.name}”.`, 2000);
   });
   const cmdStart = vscode.commands.registerCommand('pm.startFromTemplate', async (node?: any) => {
-    const templateName: string | undefined = node?.template?.name;
-    if (!templateName) return;
+    const tpl: PMTemplate | undefined = node?.template as PMTemplate | undefined;
+    if (!tpl) return;
+
     const name = (await vscode.window.showInputBox({
-      title: `Start z szablonu: ${templateName}`,
+      title: `Start z szablonu: ${tpl.name}`,
       prompt: 'Nazwa projektu',
-      value: templateName
+      value: tpl.name
     }))?.trim();
     if (!name) return;
 
-    const project: PMProject = instantiateTemplate(templateName);
+    const project: PMProject = instantiateTemplate(tpl);
     project.name = name;
-    const savedPath = await storage.saveToWorkspaceFile(project);
 
-    storage.activeProject = project;
+    const savedPath = await storage.createFromTemplateAndSave(project);
     provider.refresh();
     await revealProjectRoot(project);
-
+    updateStatusBar(storage.activeProject);
     vscode.window.setStatusBarMessage(`Utworzono projekt „${name}” • ${savedPath}`, 3000);
   });
 
   context.subscriptions.push(cmdToggle, cmdOpen, cmdStart);
 
+  // Widok
   vscode.window.registerTreeDataProvider('pmExplorer', provider);
   treeView = vscode.window.createTreeView('pmExplorer', {
     treeDataProvider: provider,
@@ -57,11 +62,7 @@ export function activate(context: vscode.ExtensionContext) {
   });
   context.subscriptions.push(treeView);
 
-  treeView.onDidChangeSelection(e => {
-    const node = e.selection?.[0];
-    if (node?.kind === 'task') vscode.commands.executeCommand('pm.toggleTaskDone', node);
-  });
-
+  // StatusBar
   statusItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 100);
   context.subscriptions.push(statusItem);
   updateStatusBar(storage.activeProject);
@@ -84,13 +85,13 @@ async function revealProjectRoot(project: PMProject) {
 
 function updateStatusBar(project: PMProject | null) {
   if (!project) {
-    statusItem.text = '$(project) No Project';
+    statusItem.text = '$(briefcase) No Project';
     statusItem.tooltip = 'Brak aktywnego projektu';
     statusItem.show();
     return;
   }
   const c = counts(project);
-  statusItem.text = `$(project) ${project.name}  $(library)${c.modules}  $(list-ordered)${c.total}  ⏳${c.todo} ✅${c.done}`;
+  statusItem.text = `$(briefcase) ${project.name}  $(library)${c.modules}  $(list-ordered)${c.total}  ⏳${c.todo} ✅${c.done}`;
   statusItem.tooltip = project.description || 'Project';
   statusItem.show();
 }

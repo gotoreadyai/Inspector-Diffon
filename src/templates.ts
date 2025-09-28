@@ -1,4 +1,5 @@
-import { PMModule, PMProject, PMTask } from './types';
+import * as vscode from 'vscode';
+import { PMProject, PMTask } from './types';
 import { uid } from './utils';
 
 export interface PMTemplate {
@@ -8,32 +9,31 @@ export interface PMTemplate {
   modules: Array<{ name: string; tasks?: PMTask[] }>;
 }
 
-export const templates: PMTemplate[] = [
-  {
-    id: 'webapp-basic',
-    name: 'WebApp Basic',
-    description: 'Podstawowa aplikacja web: auth, dashboard, katalog.',
-    modules: [
-      { name: 'auth', tasks: [ t('Logowanie', [t('Form: email+hasło'), t('Reset hasła')]), t('Rejestracja') ] },
-      { name: 'dashboard', tasks: [ t('Widok startowy'), t('KPI widgety') ] },
-      { name: 'catalog', tasks: [ t('Lista produktów'), t('Filtrowanie'), t('Szczegóły produktu') ] }
-    ]
-  },
-  {
-    id: 'saas-starter',
-    name: 'SaaS Starter',
-    description: 'Multi-tenant, role-based access, rozliczenia.',
-    modules: [
-      { name: 'tenancy', tasks: [ t('Modele danych'), t('Izolacja tenantów') ] },
-      { name: 'rbac', tasks: [ t('Role & uprawnienia'), t('Guardy') ] },
-      { name: 'billing', tasks: [ t('Integracja płatności'), t('Subskrypcje') ] }
-    ]
+export async function loadTemplates(): Promise<PMTemplate[]> {
+  const root = vscode.workspace.workspaceFolders?.[0]?.uri;
+  if (!root) return [];
+  const dir = vscode.Uri.joinPath(root, '.inspector-diff', 'templates');
+  try {
+    const files = await vscode.workspace.fs.readDirectory(dir);
+    const out: PMTemplate[] = [];
+    for (const [name, type] of files) {
+      if (type === vscode.FileType.File && name.endsWith('.json')) {
+        try {
+          const fileUri = vscode.Uri.joinPath(dir, name);
+          const raw = Buffer.from(await vscode.workspace.fs.readFile(fileUri)).toString('utf8');
+          out.push(JSON.parse(raw) as PMTemplate);
+        } catch (e: any) {
+          vscode.window.showWarningMessage(`Szablon ${name}: ${e?.message ?? e}`);
+        }
+      }
+    }
+    return out;
+  } catch {
+    return [];
   }
-];
+}
 
-export function instantiateTemplate(name: string): PMProject {
-  const tpl = templates.find(t => t.name === name || t.id === name);
-  if (!tpl) throw new Error('Nie znaleziono szablonu');
+export function instantiateTemplate(tpl: PMTemplate): PMProject {
   return {
     id: uid(),
     name: tpl.name,
@@ -47,9 +47,6 @@ export function instantiateTemplate(name: string): PMProject {
   };
 }
 
-function t(title: string, children?: PMTask[]): PMTask {
-  return { id: uid(), title, status: 'todo', children: children || [] };
-}
 function cloneTaskDeep(task: PMTask): PMTask {
   return {
     id: uid(),

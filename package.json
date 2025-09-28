@@ -2,7 +2,7 @@
     "name": "project-modules-tasks",
     "displayName": "Project Modules & Tasks",
     "description": "Explorer projektów na bazie szablonów. Status zadań: todo ⇄ done.",
-    "version": "0.8.3",
+    "version": "1.1.1",
     "publisher": "hildebrand-demo",
     "engines": {
         "vscode": "^1.90.0"
@@ -40,7 +40,7 @@
             },
             {
                 "command": "pm.toggleTaskDone",
-                "title": "Toggle done",
+                "title": "Przełącz status zadania",
                 "icon": "$(check)"
             }
         ],
@@ -57,11 +57,6 @@
                     "command": "pm.startFromTemplate",
                     "when": "view == pmExplorer && viewItem == template",
                     "group": "inline@1"
-                },
-                {
-                    "command": "pm.toggleTaskDone",
-                    "when": "view == pmExplorer && viewItem == task",
-                    "group": "inline@2"
                 }
             ]
         }
