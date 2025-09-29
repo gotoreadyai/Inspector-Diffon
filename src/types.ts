@@ -1,4 +1,4 @@
-export type TaskStatus = 'todo' | 'done';
+export type TaskStatus = "todo" | "done";
 
 export interface PMTask {
   id: string;
@@ -24,4 +24,4 @@ export interface PMProject {
   modules: PMModule[];
 }
 
-export type NodeKind = 'project' | 'module' | 'task';
+export type NodeKind = "project" | "module" | "task";

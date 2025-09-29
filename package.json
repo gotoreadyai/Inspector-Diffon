@@ -2,7 +2,7 @@
     "name": "project-modules-tasks",
     "displayName": "Project Modules & Tasks",
     "description": "Explorer projektów na bazie szablonów. Status zadań: todo ⇄ done.",
-    "version": "1.1.1",
+    "version": "1.1.7",
     "publisher": "hildebrand-demo",
     "engines": {
         "vscode": "^1.90.0"
@@ -19,8 +19,17 @@
     ],
     "main": "./out/extension.js",
     "contributes": {
+        "viewsContainers": {
+            "activitybar": [
+                {
+                    "id": "pmActivity",
+                    "title": "Project Explorer",
+                    "icon": "resources/icon.svg"
+                }
+            ]
+        },
         "views": {
-            "explorer": [
+            "pmActivity": [
                 {
                     "id": "pmExplorer",
                     "name": "Project Explorer"

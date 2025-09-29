@@ -1,9 +1,5 @@
-<svg width="128" height="128" viewBox="0 0 128 128" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <rect width="128" height="128" rx="16" fill="#1e1e1e"/>
-  <path d="M32 48L48 32L64 48" stroke="#4FC1FF" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
-  <path d="M48 32V64" stroke="#4FC1FF" stroke-width="4" stroke-linecap="round"/>
-  <path d="M96 80L80 96L64 80" stroke="#42D392" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
-  <path d="M80 96V64" stroke="#42D392" stroke-width="4" stroke-linecap="round"/>
-  <rect x="20" y="56" width="88" height="16" rx="4" fill="#2d2d30"/>
-  <text x="64" y="68" text-anchor="middle" fill="#cccccc" font-family="monospace" font-size="12">DIFF</text>
+<!-- task-done.svg -->
+<svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" fill="none">
+  <circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="2"/>
+  <path d="M8 12.5l3 3 5-5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
 </svg>
