@@ -5,4 +5,4 @@
 // changed test comment
 console.log("Hello, world!")
 console.log("Another log from test1")
-    
+console.log("Minor change added to test1")
