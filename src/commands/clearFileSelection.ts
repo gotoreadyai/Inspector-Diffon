@@ -1,9 +1,8 @@
-import * as vscode from "vscode";
-import { FileTreeProvider } from "../core/FileTreeProvider";
+import * as vscode from 'vscode';
+import { FileTreeProvider } from '../core/FileTreeProvider';
 
-export function registerClearFileSelectionCommand(fileTreeProvider: FileTreeProvider) {
-  return vscode.commands.registerCommand("pm.clearFileSelection", () => {
+export const registerClearFileSelectionCommand = (fileTreeProvider: FileTreeProvider) =>
+  vscode.commands.registerCommand('pm.clearFileSelection', () => {
     fileTreeProvider.clearSelection();
-    vscode.window.setStatusBarMessage("Wyczyszczono zaznaczenie plików", 2000);
+    vscode.window.setStatusBarMessage('Cleared file selection', 2000);
   });
-}

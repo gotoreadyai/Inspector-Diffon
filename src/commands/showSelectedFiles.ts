@@ -1,18 +1,17 @@
-import * as vscode from "vscode";
-import { FileTreeProvider } from "../core/FileTreeProvider";
+import * as vscode from 'vscode';
+import { FileTreeProvider } from '../core/FileTreeProvider';
 
-export function registerShowSelectedFilesCommand(fileTreeProvider: FileTreeProvider) {
-  return vscode.commands.registerCommand("pm.showSelectedFiles", () => {
+export const registerShowSelectedFilesCommand = (fileTreeProvider: FileTreeProvider) =>
+  vscode.commands.registerCommand('pm.showSelectedFiles', () => {
     const selectedFiles = fileTreeProvider.getSelectedFiles();
     if (selectedFiles.length === 0) {
-      vscode.window.showInformationMessage("Brak zaznaczonych plików");
+      vscode.window.showInformationMessage('No selected files');
       return;
     }
-    
-    const message = selectedFiles.length === 1 
-      ? `Zaznaczony plik: ${selectedFiles[0]}`
-      : `Zaznaczone pliki (${selectedFiles.length}):\n${selectedFiles.join('\n')}`;
-    
+    const message =
+      selectedFiles.length === 1
+        ? `Selected file: ${selectedFiles[0]}`
+        : `Selected files (${selectedFiles.length}):\n${selectedFiles.join('\n')}`;
+
     vscode.window.showInformationMessage(message, { modal: true });
   });
-}

@@ -1,9 +1,7 @@
-import * as vscode from "vscode";
-import * as fs from "fs/promises";
-import { Project } from "../models";
-
-const STATE_KEY = "pm.activeProjectPath";
-const PROJECTS_DIR = ".inspector-diff/projects";
+import * as vscode from 'vscode';
+import * as fs from 'fs/promises';
+import { Project } from '../models';
+import { STATE_KEY, PATHS } from '../constants';
 
 export class Storage {
   constructor(private ctx: vscode.ExtensionContext) {}
@@ -17,23 +15,20 @@ export class Storage {
   async openFromFile(): Promise<Project | null> {
     const pick = await vscode.window.showOpenDialog({
       canSelectMany: false,
-      openLabel: "Otwórz projekt",
-      filters: { JSON: ["json"] },
+      openLabel: 'Open project',
+      filters: { JSON: ['json'] },
     });
-    if (!pick || !pick[0]) return null;
+    if (!pick?.[0]) return null;
     const uri = pick[0];
-    const raw = await fs.readFile(uri.fsPath, "utf8");
+    const raw = await fs.readFile(uri.fsPath, 'utf8');
     const data = JSON.parse(raw) as Project & { files?: string[] };
-    
-    // Migracja: jeśli stary projekt ma files, przenieś je do pierwszego modułu
-    if (data.files && data.files.length > 0 && data.modules.length > 0) {
-      if (!data.modules[0].files) {
-        data.modules[0].files = [];
-      }
-      data.modules[0].files.push(...data.files);
-      delete data.files;
+
+    // migration: old root-level files -> first module
+    if (data.files?.length && data.modules.length) {
+      data.modules[0].files = [...(data.modules[0].files ?? []), ...data.files];
+      delete (data as any).files;
     }
-    
+
     this._active = data;
     this._activeUri = uri;
     await this.ctx.workspaceState.update(STATE_KEY, uri.fsPath);
@@ -45,18 +40,14 @@ export class Storage {
     if (!lastPath) return null;
     try {
       const uri = vscode.Uri.file(lastPath);
-      const raw = await fs.readFile(uri.fsPath, "utf8");
+      const raw = await fs.readFile(uri.fsPath, 'utf8');
       const data = JSON.parse(raw) as Project & { files?: string[] };
-      
-      // Migracja: jeśli stary projekt ma files, przenieś je do pierwszego modułu
-      if (data.files && data.files.length > 0 && data.modules.length > 0) {
-        if (!data.modules[0].files) {
-          data.modules[0].files = [];
-        }
-        data.modules[0].files.push(...data.files);
-        delete data.files;
+
+      if (data.files?.length && data.modules.length) {
+        data.modules[0].files = [...(data.modules[0].files ?? []), ...data.files];
+        delete (data as any).files;
       }
-      
+
       this._active = data;
       this._activeUri = uri;
       return data;
@@ -67,24 +58,20 @@ export class Storage {
 
   async saveActive(): Promise<void> {
     if (!this._active || !this._activeUri) return;
-    const buf = Buffer.from(JSON.stringify(this._active, null, 2), "utf8");
+    const buf = Buffer.from(JSON.stringify(this._active, null, 2), 'utf8');
     await vscode.workspace.fs.writeFile(this._activeUri, buf);
   }
 
   async createFromTemplateAndSave(project: Project): Promise<string> {
     const root = vscode.workspace.workspaceFolders?.[0]?.uri;
-    if (!root) throw new Error("Brak otwartego folderu roboczego");
-    
-    // Użyj stałej PROJECTS_DIR
-    const dir = vscode.Uri.joinPath(root, PROJECTS_DIR);
+    if (!root) throw new Error('No workspace folder open');
+
+    const dir = vscode.Uri.joinPath(root, PATHS.PROJECTS_DIR);
     await vscode.workspace.fs.createDirectory(dir);
     const file = vscode.Uri.joinPath(dir, `${project.name}.json`);
-    
-    await vscode.workspace.fs.writeFile(
-      file,
-      Buffer.from(JSON.stringify(project, null, 2), "utf8")
-    );
-    
+
+    await vscode.workspace.fs.writeFile(file, Buffer.from(JSON.stringify(project, null, 2), 'utf8'));
+
     this._active = project;
     this._activeUri = file;
     await this.ctx.workspaceState.update(STATE_KEY, file.fsPath);

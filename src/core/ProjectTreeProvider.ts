@@ -1,20 +1,19 @@
-import * as vscode from "vscode";
-import { Module, Project, Task, TaskStatus } from "../models";
-import { counts, ensureArrays, formatProjectSummary } from "../utils";
-import { Template, loadTemplates } from "../templates";
+import * as vscode from 'vscode';
+import { Module, Project, Task, TaskStatus } from '../models';
+import { counts, ensureArrays, formatProjectSummary } from '../utils';
+import { Template, loadTemplates } from '../templates';
 
 const COLOR = {
-  project: new vscode.ThemeColor("charts.blue"),
-  templatesRoot: new vscode.ThemeColor("charts.purple"),
-  template: new vscode.ThemeColor("charts.orange"),
-  module: new vscode.ThemeColor("charts.yellow"),
-  taskDone: new vscode.ThemeColor("terminal.ansiGreen"),
-  taskTodo: new vscode.ThemeColor("descriptionForeground"),
-  templateTaskDone: new vscode.ThemeColor("charts.green"),
-  templateTaskTodo: new vscode.ThemeColor("descriptionForeground"),
+  project: new vscode.ThemeColor('charts.blue'),
+  templatesRoot: new vscode.ThemeColor('charts.purple'),
+  template: new vscode.ThemeColor('charts.orange'),
+  module: new vscode.ThemeColor('charts.yellow'),
+  taskDone: new vscode.ThemeColor('terminal.ansiGreen'),
+  taskTodo: new vscode.ThemeColor('descriptionForeground'),
+  templateTaskDone: new vscode.ThemeColor('charts.green'),
+  templateTaskTodo: new vscode.ThemeColor('descriptionForeground'),
 };
 
-// Dodaj stałe dla wzorców POSIX
 const TEMPLATES_GLOB = '.inspector-diff/templates/*.json';
 
 export class ProjectTreeProvider implements vscode.TreeDataProvider<TreeNode> {
@@ -31,10 +30,8 @@ export class ProjectTreeProvider implements vscode.TreeDataProvider<TreeNode> {
     this.setupTemplatesWatcher();
   }
 
-  refresh() { 
-    this._onDidChangeTreeData.fire();
-  }
-  
+  refresh = () => this._onDidChangeTreeData.fire();
+
   private async refreshTemplates() {
     this.templates = await loadTemplates();
     this.refresh();
@@ -43,7 +40,6 @@ export class ProjectTreeProvider implements vscode.TreeDataProvider<TreeNode> {
   private setupTemplatesWatcher() {
     const root = vscode.workspace.workspaceFolders?.[0]?.uri;
     if (!root) return;
-    // Użyj POSIX-compliant wzorca
     const pattern = new vscode.RelativePattern(root, TEMPLATES_GLOB);
     this.watcher?.dispose();
     this.watcher = vscode.workspace.createFileSystemWatcher(pattern);
@@ -54,12 +50,12 @@ export class ProjectTreeProvider implements vscode.TreeDataProvider<TreeNode> {
 
   getTreeItem(element: TreeNode): vscode.TreeItem {
     let collapsible = vscode.TreeItemCollapsibleState.Collapsed;
-    
-    if (element.kind === "project") {
+
+    if (element.kind === 'project') {
       collapsible = vscode.TreeItemCollapsibleState.Expanded;
-    } else if (element.kind === "task" && !element.task?.children?.length) {
+    } else if (element.kind === 'task' && !element.task?.children?.length) {
       collapsible = vscode.TreeItemCollapsibleState.None;
-    } else if (element.kind === "templateTask") {
+    } else if (element.kind === 'templateTask') {
       collapsible = vscode.TreeItemCollapsibleState.None;
     }
 
@@ -69,33 +65,32 @@ export class ProjectTreeProvider implements vscode.TreeDataProvider<TreeNode> {
     item.tooltip = element.tooltip;
     item.contextValue = element.kind;
 
-    if (element.kind === "task") {
+    if (element.kind === 'task') {
       item.iconPath = iconForTask(element.task!.status);
       item.command = {
-        command: "pm.toggleTaskDone",
-        title: "Toggle",
+        command: 'pm.toggleTaskDone',
+        title: 'Toggle',
         arguments: [element],
       };
-    } else if (element.kind === "templateTask") {
+    } else if (element.kind === 'templateTask') {
       item.iconPath = iconForTemplateTask(element.description as TaskStatus);
-    } else if (element.kind === "templatesRoot") {
-      item.iconPath = new vscode.ThemeIcon("symbol-structure", COLOR.templatesRoot);
-    } else if (element.kind === "template") {
-      item.iconPath = new vscode.ThemeIcon("rocket", COLOR.template);
+    } else if (element.kind === 'templatesRoot') {
+      item.iconPath = new vscode.ThemeIcon('symbol-structure', COLOR.templatesRoot);
+    } else if (element.kind === 'template') {
+      item.iconPath = new vscode.ThemeIcon('rocket', COLOR.template);
       item.command = {
-        command: "pm.startFromTemplate",
-        title: "Start from template",
-        arguments: [element]
+        command: 'pm.startFromTemplate',
+        title: 'Start from template',
+        arguments: [element],
       };
-    } else if (element.kind === "project") {
-      item.iconPath = new vscode.ThemeIcon("package", COLOR.project);
-    } else if (element.kind === "module") {
-      item.iconPath = new vscode.ThemeIcon("library", COLOR.module);
-      // Dodajemy komendę, która zostanie wywołana po kliknięciu modułu
+    } else if (element.kind === 'project') {
+      item.iconPath = new vscode.ThemeIcon('package', COLOR.project);
+    } else if (element.kind === 'module') {
+      item.iconPath = new vscode.ThemeIcon('milestone', COLOR.module);
       item.command = {
-        command: "pm.selectModule",
-        title: "Select module",
-        arguments: [element.module]
+        command: 'pm.selectModule',
+        title: 'Select module',
+        arguments: [element.module],
       };
     }
 
@@ -107,63 +102,63 @@ export class ProjectTreeProvider implements vscode.TreeDataProvider<TreeNode> {
     const nodes: TreeNode[] = [];
 
     if (!element) {
-      nodes.push({ kind: "templatesRoot", label: "Templates" });
+      nodes.push({ kind: 'templatesRoot', label: 'Templates' });
       if (p) {
         ensureArrays(p);
         const c = counts(p);
         nodes.push({
-          kind: "project",
+          kind: 'project',
           label: p.name,
           description: formatProjectSummary(c),
           project: p,
-          tooltip: p.description || "",
+          tooltip: p.description || '',
         });
       }
       return nodes;
     }
 
-    if (element.kind === "templatesRoot") return this.templates.map(nodeTemplate);
-    if (element.kind === "template") {
+    if (element.kind === 'templatesRoot') return this.templates.map(nodeTemplate);
+    if (element.kind === 'template') {
       return element.template!.modules.map(m => ({
-        kind: "templateModule" as const,
+        kind: 'templateModule' as const,
         label: m.name,
-        description: `${(m.tasks || []).length} zadań`,
+        description: `${(m.tasks || []).length} tasks`,
         template: element.template,
       }));
     }
-    if (element.kind === "templateModule") {
+    if (element.kind === 'templateModule') {
       const mod = element.template!.modules.find(m => m.name === element.label);
       if (!mod) return [];
       return (mod.tasks || []).map(t => ({
-        kind: "templateTask" as const,
+        kind: 'templateTask' as const,
         label: t.title,
-        description: (t.status as TaskStatus) || "todo",
+        description: (t.status as TaskStatus) || 'todo',
         template: element.template,
       }));
     }
 
-    if (element.kind === "project") return element.project!.modules.map(nodeModule);
-    if (element.kind === "module") return element.module!.tasks.map(nodeTask);
-    if (element.kind === "task") return (element.task!.children || []).map(nodeTask);
+    if (element.kind === 'project') return element.project!.modules.map(nodeModule);
+    if (element.kind === 'module') return element.module!.tasks.map(nodeTask);
+    if (element.kind === 'task') return (element.task!.children || []).map(nodeTask);
     return [];
   }
 
   toggleTaskDone = async (node: TreeNode) => {
-    if (node.kind !== "task") return;
+    if (node.kind !== 'task') return;
     const task = node.task!;
-    const goingToDone = task.status !== "done";
+    const goingToDone = task.status !== 'done';
 
     if (goingToDone) {
       if (!allDescendantsDone(task)) {
         vscode.window.setStatusBarMessage(
-          `Nie można oznaczyć „${task.title}” jako done — posiada niedokończone podzadania.`,
+          `You cannot mark “${task.title}” as done — it has unfinished subtasks.`,
           2500
         );
         return;
       }
-      task.status = "done";
+      task.status = 'done';
     } else {
-      task.status = "todo";
+      task.status = 'todo';
     }
 
     const p = this.getProject();
@@ -174,7 +169,7 @@ export class ProjectTreeProvider implements vscode.TreeDataProvider<TreeNode> {
 }
 
 export interface TreeNode {
-  kind: NodeKind | "templatesRoot" | "template" | "templateModule" | "templateTask";
+  kind: NodeKind | 'templatesRoot' | 'template' | 'templateModule' | 'templateTask';
   label: string;
   description?: string;
   tooltip?: string;
@@ -184,51 +179,45 @@ export interface TreeNode {
   template?: Template;
 }
 
-type NodeKind = "project" | "module" | "task";
+type NodeKind = 'project' | 'module' | 'task';
 
-function nodeModule(m: Module): TreeNode {
+const nodeModule = (m: Module): TreeNode => {
   const fileCount = m.files?.length || 0;
   return {
-    kind: "module",
+    kind: 'module',
     label: m.name,
-    description: `${countTasks(m)} zadań, ${fileCount} plików`,
+    description: `${countTasks(m)} tasks, ${fileCount} files`,
     module: m,
   };
-}
+};
 
-function nodeTask(t: Task): TreeNode {
-  return {
-    kind: "task",
-    label: t.title,
-    description: t.status,
-    tooltip: t.description,
-    task: t,
-  };
-}
+const nodeTask = (t: Task): TreeNode => ({
+  kind: 'task',
+  label: t.title,
+  description: t.status,
+  tooltip: t.description,
+  task: t,
+});
 
-function nodeTemplate(tpl: Template): TreeNode {
-  return {
-    kind: "template",
-    label: tpl.name,
-    description: tpl.description,
-    template: tpl,
-    tooltip: tpl.description,
-  };
-}
+const nodeTemplate = (tpl: Template): TreeNode => ({
+  kind: 'template',
+  label: tpl.name,
+  description: tpl.description,
+  template: tpl,
+  tooltip: tpl.description,
+});
 
-function iconForTask(status: TaskStatus) {
-  return status === "done"
-    ? new vscode.ThemeIcon("check", COLOR.taskDone)
-    : new vscode.ThemeIcon("circle-outline", COLOR.taskTodo);
-}
+const iconForTask = (status: TaskStatus) =>
+  status === 'done'
+    ? new vscode.ThemeIcon('check', COLOR.taskDone)
+    : new vscode.ThemeIcon('circle-outline', COLOR.taskTodo);
 
-function iconForTemplateTask(status: TaskStatus) {
-  return status === "done"
-    ? new vscode.ThemeIcon("pass", COLOR.templateTaskDone)
-    : new vscode.ThemeIcon("circle-outline", COLOR.templateTaskTodo);
-}
+const iconForTemplateTask = (status: TaskStatus) =>
+  status === 'done'
+    ? new vscode.ThemeIcon('pass', COLOR.templateTaskDone)
+    : new vscode.ThemeIcon('circle-outline', COLOR.templateTaskTodo);
 
-function countTasks(m: Module) {
+const countTasks = (m: Module) => {
   let n = 0;
   const walk = (ts: Task[]) => {
     for (const t of ts) {
@@ -238,21 +227,15 @@ function countTasks(m: Module) {
   };
   walk(m.tasks);
   return n;
-}
+};
 
-function stableId(node: TreeNode): string {
-  if (node.kind === "task" && node.task) return `task:${node.task.id}`;
-  if (node.kind === "module" && node.module) return `module:${node.module.id}`;
-  if (node.kind === "project" && node.project) return `project:${node.project.id}`;
-  if (node.kind === "template" && node.template) return `template:${node.template.id}`;
+const stableId = (node: TreeNode): string => {
+  if (node.kind === 'task' && node.task) return `task:${node.task.id}`;
+  if (node.kind === 'module' && node.module) return `module:${node.module.id}`;
+  if (node.kind === 'project' && node.project) return `project:${node.project.id}`;
+  if (node.kind === 'template' && node.template) return `template:${node.template.id}`;
   return `${node.kind}:${node.label}`;
-}
+};
 
-function allDescendantsDone(t: Task): boolean {
-  if (!t.children || t.children.length === 0) return true;
-  for (const c of t.children) {
-    if (c.status !== "done") return false;
-    if (!allDescendantsDone(c)) return false;
-  }
-  return true;
-}
+const allDescendantsDone = (t: Task): boolean =>
+  !t.children?.length || t.children.every(c => c.status === 'done' && allDescendantsDone(c));
