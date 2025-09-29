@@ -1,8 +1,8 @@
-// path: src/projectTreeProvider.ts
+// src/core/ProjectTreeProvider.ts
 import * as vscode from "vscode";
-import { PMModule, PMProject, PMTask, NodeKind, TaskStatus } from "./types";
-import { counts, ensureArrays, formatProjectSummary } from "./utils";
-import { PMTemplate, loadTemplates } from "./templates";
+import { Module, Project, Task, TaskStatus } from "../models";
+import { counts, ensureArrays, formatProjectSummary } from "../utils";
+import { Template, loadTemplates } from "../templates";
 
 const COLOR = {
   project: new vscode.ThemeColor("charts.blue"),
@@ -13,25 +13,22 @@ const COLOR = {
   taskTodo: new vscode.ThemeColor("disabledForeground"),
 };
 
-export class PMExplorerProvider implements vscode.TreeDataProvider<TreeNode> {
+export class ProjectTreeProvider implements vscode.TreeDataProvider<TreeNode> {
   private _onDidChangeTreeData = new vscode.EventEmitter<TreeNode | void>();
   readonly onDidChangeTreeData = this._onDidChangeTreeData.event;
-
-  private templates: PMTemplate[] = [];
+  private templates: Template[] = [];
   private watcher: vscode.FileSystemWatcher | undefined;
 
   constructor(
-    private getProject: () => PMProject | null,
-    private setProject: (p: PMProject | null) => Promise<void>
+    private getProject: () => Project | null,
+    private setProject: (p: Project | null) => Promise<void>
   ) {
     this.refreshTemplates();
     this.setupTemplatesWatcher();
   }
 
-  refresh() {
-    this._onDidChangeTreeData.fire();
-  }
-
+  refresh() { this._onDidChangeTreeData.fire(); }
+  
   private async refreshTemplates() {
     this.templates = await loadTemplates();
     this.refresh();
@@ -40,10 +37,7 @@ export class PMExplorerProvider implements vscode.TreeDataProvider<TreeNode> {
   private setupTemplatesWatcher() {
     const root = vscode.workspace.workspaceFolders?.[0]?.uri;
     if (!root) return;
-    const pattern = new vscode.RelativePattern(
-      root,
-      ".inspector-diff/templates/*.json"
-    );
+    const pattern = new vscode.RelativePattern(root, ".inspector-diff/templates/*.json");
     this.watcher?.dispose();
     this.watcher = vscode.workspace.createFileSystemWatcher(pattern);
     this.watcher.onDidCreate(() => this.refreshTemplates());
@@ -52,12 +46,11 @@ export class PMExplorerProvider implements vscode.TreeDataProvider<TreeNode> {
   }
 
   getTreeItem(element: TreeNode): vscode.TreeItem {
-    const collapsible =
-      element.kind === "project"
-        ? vscode.TreeItemCollapsibleState.Expanded
-        : element.kind === "task" && !element.task?.children?.length
-        ? vscode.TreeItemCollapsibleState.None
-        : vscode.TreeItemCollapsibleState.Collapsed;
+    const collapsible = element.kind === "project"
+      ? vscode.TreeItemCollapsibleState.Expanded
+      : element.kind === "task" && !element.task?.children?.length
+      ? vscode.TreeItemCollapsibleState.None
+      : vscode.TreeItemCollapsibleState.Collapsed;
 
     const item = new vscode.TreeItem(element.label, collapsible);
     item.id = stableId(element);
@@ -65,7 +58,6 @@ export class PMExplorerProvider implements vscode.TreeDataProvider<TreeNode> {
     item.tooltip = element.tooltip;
     item.contextValue = element.kind;
 
-    // Ikony/kolory — centralnie tutaj
     if (element.kind === "task") {
       item.iconPath = iconForTask(element.task!.status);
       item.command = {
@@ -74,10 +66,7 @@ export class PMExplorerProvider implements vscode.TreeDataProvider<TreeNode> {
         arguments: [element],
       };
     } else if (element.kind === "templatesRoot") {
-      item.iconPath = new vscode.ThemeIcon(
-        "symbol-structure",
-        COLOR.templatesRoot
-      );
+      item.iconPath = new vscode.ThemeIcon("symbol-structure", COLOR.templatesRoot);
     } else if (element.kind === "template") {
       item.iconPath = new vscode.ThemeIcon("file", COLOR.template);
     } else if (element.kind === "project") {
@@ -94,10 +83,7 @@ export class PMExplorerProvider implements vscode.TreeDataProvider<TreeNode> {
     const nodes: TreeNode[] = [];
 
     if (!element) {
-      nodes.push({
-        kind: "templatesRoot",
-        label: "Templates",
-      });
+      nodes.push({ kind: "templatesRoot", label: "Templates" });
       if (p) {
         ensureArrays(p);
         const c = counts(p);
@@ -112,10 +98,9 @@ export class PMExplorerProvider implements vscode.TreeDataProvider<TreeNode> {
       return nodes;
     }
 
-    if (element.kind === "templatesRoot")
-      return this.templates.map(nodeTemplate);
+    if (element.kind === "templatesRoot") return this.templates.map(nodeTemplate);
     if (element.kind === "template") {
-      return element.template!.modules.map((m) => ({
+      return element.template!.modules.map(m => ({
         kind: "templateModule" as const,
         label: m.name,
         description: `${(m.tasks || []).length} zadań`,
@@ -123,11 +108,9 @@ export class PMExplorerProvider implements vscode.TreeDataProvider<TreeNode> {
       }));
     }
     if (element.kind === "templateModule") {
-      const mod = element.template!.modules.find(
-        (m) => m.name === element.label
-      );
+      const mod = element.template!.modules.find(m => m.name === element.label);
       if (!mod) return [];
-      return (mod.tasks || []).map((t) => ({
+      return (mod.tasks || []).map(t => ({
         kind: "templateTask" as const,
         label: t.title,
         description: (t.status as TaskStatus) || "todo",
@@ -135,11 +118,9 @@ export class PMExplorerProvider implements vscode.TreeDataProvider<TreeNode> {
       }));
     }
 
-    if (element.kind === "project")
-      return element.project!.modules.map(nodeModule);
+    if (element.kind === "project") return element.project!.modules.map(nodeModule);
     if (element.kind === "module") return element.module!.tasks.map(nodeTask);
-    if (element.kind === "task")
-      return (element.task!.children || []).map(nodeTask);
+    if (element.kind === "task") return (element.task!.children || []).map(nodeTask);
     return [];
   }
 
@@ -169,22 +150,19 @@ export class PMExplorerProvider implements vscode.TreeDataProvider<TreeNode> {
 }
 
 export interface TreeNode {
-  kind:
-    | NodeKind
-    | "templatesRoot"
-    | "template"
-    | "templateModule"
-    | "templateTask";
+  kind: NodeKind | "templatesRoot" | "template" | "templateModule" | "templateTask";
   label: string;
   description?: string;
   tooltip?: string;
-  project?: PMProject;
-  module?: PMModule;
-  task?: PMTask;
-  template?: PMTemplate;
+  project?: Project;
+  module?: Module;
+  task?: Task;
+  template?: Template;
 }
 
-function nodeModule(m: PMModule): TreeNode {
+type NodeKind = "project" | "module" | "task";
+
+function nodeModule(m: Module): TreeNode {
   return {
     kind: "module",
     label: m.name,
@@ -193,7 +171,7 @@ function nodeModule(m: PMModule): TreeNode {
   };
 }
 
-function nodeTask(t: PMTask): TreeNode {
+function nodeTask(t: Task): TreeNode {
   return {
     kind: "task",
     label: t.title,
@@ -203,8 +181,7 @@ function nodeTask(t: PMTask): TreeNode {
   };
 }
 
-function nodeTemplate(tpl: PMTemplate): TreeNode {
-  // Rakieta zostaje wyłącznie jako akcja inline; węzeł szablonu wygląda jak plik (ikona w getTreeItem)
+function nodeTemplate(tpl: Template): TreeNode {
   return {
     kind: "template",
     label: tpl.name,
@@ -220,9 +197,9 @@ function iconForTask(status: TaskStatus) {
     : new vscode.ThemeIcon("circle-large-outline", COLOR.taskTodo);
 }
 
-function countTasks(m: PMModule) {
+function countTasks(m: Module) {
   let n = 0;
-  const walk = (ts: PMTask[]) => {
+  const walk = (ts: Task[]) => {
     for (const t of ts) {
       n++;
       if (t.children?.length) walk(t.children);
@@ -235,14 +212,12 @@ function countTasks(m: PMModule) {
 function stableId(node: TreeNode): string {
   if (node.kind === "task" && node.task) return `task:${node.task.id}`;
   if (node.kind === "module" && node.module) return `module:${node.module.id}`;
-  if (node.kind === "project" && node.project)
-    return `project:${node.project.id}`;
-  if (node.kind === "template" && node.template)
-    return `template:${node.template.id}`;
+  if (node.kind === "project" && node.project) return `project:${node.project.id}`;
+  if (node.kind === "template" && node.template) return `template:${node.template.id}`;
   return `${node.kind}:${node.label}`;
 }
 
-function allDescendantsDone(t: PMTask): boolean {
+function allDescendantsDone(t: Task): boolean {
   if (!t.children || t.children.length === 0) return true;
   for (const c of t.children) {
     if (c.status !== "done") return false;

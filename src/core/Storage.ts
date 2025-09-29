@@ -1,28 +1,19 @@
-// path: src/storage.ts
+// src/core/Storage.ts
 import * as vscode from "vscode";
 import * as fs from "fs/promises";
-import { PMProject } from "./types";
+import { Project } from "../models";
+import { STATE_KEY } from "../constants";
 
-const STATE_KEY = "pm.activeProjectPath";
-
-export class PMStorage {
+export class Storage {
   constructor(private ctx: vscode.ExtensionContext) {}
-  private _active: PMProject | null = null;
+  private _active: Project | null = null;
   private _activeUri: vscode.Uri | null = null;
 
-  get activeProject() {
-    return this._active;
-  }
+  get activeProject() { return this._active; }
+  set activeProject(p: Project | null) { this._active = p; }
+  get activeUri() { return this._activeUri; }
 
-  set activeProject(p: PMProject | null) {
-    this._active = p;
-  }
-
-  get activeUri() {
-    return this._activeUri;
-  }
-
-  async openFromFile(): Promise<PMProject | null> {
+  async openFromFile(): Promise<Project | null> {
     const pick = await vscode.window.showOpenDialog({
       canSelectMany: false,
       openLabel: "Otwórz projekt",
@@ -31,26 +22,24 @@ export class PMStorage {
     if (!pick || !pick[0]) return null;
     const uri = pick[0];
     const raw = await fs.readFile(uri.fsPath, "utf8");
-    const data = JSON.parse(raw) as PMProject;
+    const data = JSON.parse(raw) as Project;
     this._active = data;
     this._activeUri = uri;
     await this.ctx.workspaceState.update(STATE_KEY, uri.fsPath);
     return data;
   }
 
-  async loadLastProjectIfAny(): Promise<PMProject | null> {
+  async loadLastProjectIfAny(): Promise<Project | null> {
     const lastPath = this.ctx.workspaceState.get<string>(STATE_KEY);
     if (!lastPath) return null;
     try {
       const uri = vscode.Uri.file(lastPath);
       const raw = await fs.readFile(uri.fsPath, "utf8");
-      const data = JSON.parse(raw) as PMProject;
+      const data = JSON.parse(raw) as Project;
       this._active = data;
       this._activeUri = uri;
       return data;
-    } catch {
-      return null;
-    }
+    } catch { return null; }
   }
 
   async saveActive(): Promise<void> {
@@ -59,7 +48,7 @@ export class PMStorage {
     await vscode.workspace.fs.writeFile(this._activeUri, buf);
   }
 
-  async createFromTemplateAndSave(project: PMProject): Promise<string> {
+  async createFromTemplateAndSave(project: Project): Promise<string> {
     const root = vscode.workspace.workspaceFolders?.[0]?.uri;
     if (!root) throw new Error("Brak otwartego folderu roboczego");
     const dir = vscode.Uri.joinPath(root, ".inspector-diff", "projects");

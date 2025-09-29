@@ -1,19 +1,22 @@
-// path: src/extension.ts
+// src/extension.ts
 import * as vscode from "vscode";
-import { PMExplorerProvider, TreeNode } from "./projectTreeProvider";
-import { PMProject } from "./types";
-import { PMStorage } from "./storage";
+import { Storage } from "./core/Storage";
+import { ProjectTreeProvider } from "./core/ProjectTreeProvider";
+import { Project } from "./models";
 import { counts, formatProjectSummary } from "./utils";
-import { PMTemplate, instantiateTemplate } from "./templates";
+import { COMMANDS, VIEW_ID } from "./constants";
+import { registerToggleTaskDoneCommand } from "./commands/toggleTaskDone";
+import { registerOpenProjectCommand } from "./commands/openProject";
+import { registerStartFromTemplateCommand } from "./commands/startFromTemplate";
 
 let statusItem: vscode.StatusBarItem;
-let treeView: vscode.TreeView<TreeNode>;
+let treeView: vscode.TreeView<any>;
 
 export async function activate(context: vscode.ExtensionContext) {
-  const storage = new PMStorage(context);
+  const storage = new Storage(context);
   await storage.loadLastProjectIfAny();
 
-  const provider = new PMExplorerProvider(
+  const provider = new ProjectTreeProvider(
     () => storage.activeProject,
     async (p) => {
       storage.activeProject = p;
@@ -22,71 +25,39 @@ export async function activate(context: vscode.ExtensionContext) {
     }
   );
 
-  // Mały helper: jedna ścieżka po zmianie aktywnego projektu
-  const applyActiveProject = async (project: PMProject, toast: string, ms = 3000) => {
+  // Helper: jedna ścieżka po zmianie aktywnego projektu
+  const applyActiveProject = async (project: Project, toast: string, ms = 3000) => {
     provider.refresh();
     await revealProjectRoot(project);
     updateStatusBar(storage.activeProject);
     vscode.window.setStatusBarMessage(toast, ms);
   };
 
-  const cmdToggle = vscode.commands.registerCommand(
-    "pm.toggleTaskDone",
-    async (node?: TreeNode) => {
-      if (node?.kind === "task") await provider.toggleTaskDone(node);
-    }
+  // Rejestracja komend
+  context.subscriptions.push(
+    registerToggleTaskDoneCommand(provider),
+    registerOpenProjectCommand(storage, applyActiveProject),
+    registerStartFromTemplateCommand(storage, applyActiveProject)
   );
 
-  const cmdOpen = vscode.commands.registerCommand("pm.openProject", async () => {
-    const p = await storage.openFromFile();
-    if (!p) return;
-    await applyActiveProject(p, `Wczytano projekt „${p.name}”.`, 2000);
-  });
-
-  const cmdStart = vscode.commands.registerCommand(
-    "pm.startFromTemplate",
-    async (node?: any) => {
-      const tpl: PMTemplate | undefined = node?.template as PMTemplate | undefined;
-      if (!tpl) return;
-
-      const name = (
-        await vscode.window.showInputBox({
-          title: `Start z szablonu: ${tpl.name}`,
-          prompt: "Nazwa projektu",
-          value: tpl.name,
-        })
-      )?.trim();
-      if (!name) return;
-
-      const project: PMProject = instantiateTemplate(tpl);
-      project.name = name;
-
-      const savedPath = await storage.createFromTemplateAndSave(project);
-      await applyActiveProject(project, `Utworzono projekt „${name}” • ${savedPath}`, 3000);
-    }
-  );
-
-  context.subscriptions.push(cmdToggle, cmdOpen, cmdStart);
-
-  vscode.window.registerTreeDataProvider("pmExplorer", provider);
-  treeView = vscode.window.createTreeView("pmExplorer", {
+  // Rejestracja TreeDataProvider
+  vscode.window.registerTreeDataProvider(VIEW_ID, provider);
+  treeView = vscode.window.createTreeView(VIEW_ID, {
     treeDataProvider: provider,
     showCollapseAll: true,
     canSelectMany: false,
   });
   context.subscriptions.push(treeView);
 
-  statusItem = vscode.window.createStatusBarItem(
-    vscode.StatusBarAlignment.Left,
-    100
-  );
+  // Pasek statusu
+  statusItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 100);
   context.subscriptions.push(statusItem);
   updateStatusBar(storage.activeProject);
 }
 
 export function deactivate() {}
 
-async function revealProjectRoot(project: PMProject) {
+async function revealProjectRoot(project: Project) {
   try {
     const c = counts(project);
     const element = {
@@ -99,7 +70,7 @@ async function revealProjectRoot(project: PMProject) {
   } catch {}
 }
 
-function updateStatusBar(project: PMProject | null) {
+function updateStatusBar(project: Project | null) {
   if (!project) {
     statusItem.text = "$(package) No Project";
     statusItem.tooltip = "Brak aktywnego projektu";
