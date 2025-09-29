@@ -1,3 +1,4 @@
+// src/extension.ts
 import * as vscode from "vscode";
 import * as path from "path";
 import { ProjectTreeProvider, TreeNode } from "./core/ProjectTreeProvider";
@@ -6,7 +7,7 @@ import { Storage } from "./core/Storage";
 import { counts, formatProjectSummary } from "./utils";
 import { FileTreeProvider } from "./core/FileTreeProvider";
 
-// Importy komend bezpośrednio z plików
+// Importy komend
 import { registerToggleTaskDoneCommand } from "./commands/toggleTaskDone";
 import { registerOpenProjectCommand } from "./commands/openProject";
 import { registerStartFromTemplateCommand } from "./commands/startFromTemplate";
@@ -39,7 +40,6 @@ export async function activate(context: vscode.ExtensionContext) {
     vscode.commands.executeCommand('setContext', 'pm.hasActiveProject', !!project);
   };
 
-  // Ustaw początkowy stan
   setProjectContext(storage.activeProject);
 
   const provider = new ProjectTreeProvider(
@@ -52,7 +52,7 @@ export async function activate(context: vscode.ExtensionContext) {
     }
   );
 
-  // Provider drzewa plików - przekazujemy context do konstruktora
+  // Provider drzewa plików
   const fileTreeProvider = new FileTreeProvider(root.fsPath, context);
 
   // Helper: jedna ścieżka po zmianie aktywnego projektu
@@ -60,6 +60,7 @@ export async function activate(context: vscode.ExtensionContext) {
     // reset aktywnego modułu przy zmianie projektu
     activeModule = null;
     fileTreeProvider.clearSelection();
+    fileTreeProvider.setActiveModuleName(null); // NOWE: dezaktywuj drzewo plików
     provider.refresh();
     await revealProjectRoot(project);
     updateStatusBar(storage.activeProject);
@@ -75,9 +76,12 @@ export async function activate(context: vscode.ExtensionContext) {
     registerClearFileSelectionCommand(fileTreeProvider),
     registerShowSelectedFilesCommand(fileTreeProvider),
 
-    // Kliknięcie modułu = ustaw aktywny moduł, a jego files => zaznaczenie w drzewie
+    // Kliknięcie modułu = ustaw aktywny moduł, jego files => zaznaczenie w drzewie
     vscode.commands.registerCommand("pm.selectModule", (module: Module) => {
       activeModule = module || null;
+
+      // NOWE: ustaw info w drzewie do którego modułu przypisujemy pliki
+      fileTreeProvider.setActiveModuleName(activeModule ? activeModule.name : null);
 
       const files = activeModule?.files ?? [];
       fileTreeProvider.selectFiles(files);
@@ -109,7 +113,7 @@ export async function activate(context: vscode.ExtensionContext) {
   });
   context.subscriptions.push(fileTreeView);
 
-  // NOWE: Słuchaj zdarzeń rozwijania i zwijania węzłów
+  // Zdarzenia expand/collapse dla zapamiętania stanu
   fileTreeView.onDidExpandElement(e => {
     if (e.element && e.element.id) {
       fileTreeProvider.setExpanded(e.element.id, true);
@@ -154,6 +158,7 @@ export async function activate(context: vscode.ExtensionContext) {
       }
 
       if (!activeModule) {
+        // Teoretycznie nie powinno się zdarzyć, bo komenda nie jest podpinana bez aktywnego modułu
         vscode.window.showWarningMessage("Najpierw wybierz moduł (kliknij moduł w drzewie Projektów).");
         return;
       }
@@ -162,11 +167,9 @@ export async function activate(context: vscode.ExtensionContext) {
 
       const idx = activeModule.files.indexOf(fileUri.fsPath);
       if (idx >= 0) {
-        // usuń
         activeModule.files.splice(idx, 1);
         vscode.window.setStatusBarMessage(`Odpięto plik od modułu: ${path.basename(fileUri.fsPath)}`, 2000);
       } else {
-        // dodaj
         activeModule.files.push(fileUri.fsPath);
         vscode.window.setStatusBarMessage(`Przypięto plik do modułu: ${path.basename(fileUri.fsPath)}`, 2000);
       }
@@ -179,7 +182,8 @@ export async function activate(context: vscode.ExtensionContext) {
     })
   );
 
-  // Początkowa aktualizacja statusu
+  // Początkowo drzewo plików nieaktywne, dopóki nie wybierzesz modułu
+  fileTreeProvider.setActiveModuleName(null);
   updateFileStatus(fileTreeProvider);
 }
 
@@ -213,18 +217,31 @@ function updateStatusBar(project: Project | null) {
 
 function updateFileStatus(fileTreeProvider: FileTreeProvider) {
   const selectedFiles = fileTreeProvider.getSelectedFiles();
+  const activeModuleName = fileTreeProvider.getActiveModuleName();
+
+  if (!activeModuleName) {
+    fileStatusBarItem.text = `$(file) wybierz moduł, aby przypisywać pliki`;
+    fileStatusBarItem.tooltip = `Kliknij moduł w drzewie Projektów (PM Explorer)`;
+    fileStatusBarItem.command = undefined;
+    fileStatusBarItem.show();
+    return;
+  }
+
   if (selectedFiles.length > 0) {
     const fileNames = selectedFiles.map(f => path.basename(f)).join(', ');
+    const label = `$(file) ${selectedFiles.length} plików • moduł: ${activeModuleName}`;
+    fileStatusBarItem.text = label;
     if (fileNames.length > 50) {
-      fileStatusBarItem.text = `$(file) ${selectedFiles.length} plików zaznaczonych`;
       fileStatusBarItem.tooltip = `Zaznaczone: ${fileNames.substring(0, 50)}...`;
     } else {
-      fileStatusBarItem.text = `$(file) ${selectedFiles.length} plików zaznaczonych`;
       fileStatusBarItem.tooltip = `Zaznaczone: ${fileNames}`;
     }
     fileStatusBarItem.command = "pm.clearFileSelection";
     fileStatusBarItem.show();
   } else {
-    fileStatusBarItem.hide();
+    fileStatusBarItem.text = `$(file) 0 plików • moduł: ${activeModuleName}`;
+    fileStatusBarItem.tooltip = `Nie wybrano plików dla modułu: ${activeModuleName}`;
+    fileStatusBarItem.command = undefined;
+    fileStatusBarItem.show();
   }
 }

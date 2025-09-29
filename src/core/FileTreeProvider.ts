@@ -7,6 +7,8 @@ export interface FileNode {
   name: string;
   isFile: boolean;
   children?: FileNode[];
+  // Wewnętrzne: węzeł-informacja, gdy nie wybrano modułu
+  kind?: 'info' | 'node';
 }
 
 export class FileTreeProvider implements vscode.TreeDataProvider<FileNode> {
@@ -20,9 +22,12 @@ export class FileTreeProvider implements vscode.TreeDataProvider<FileNode> {
   private fileCache = new Map<string, FileNode>();
   private cacheBuilt = false; // Flaga czy cache jest już zbudowany
   
-  // NOWE: Zarządzanie stanem rozwinięcia
+  // Zarządzanie stanem rozwinięcia
   private expandedNodes = new Set<string>();
   private context: vscode.ExtensionContext;
+
+  // NOWE: aktywny moduł (nazwa); gdy null — drzewo nieaktywne
+  private activeModuleName: string | null = null;
   
   constructor(workspaceRoot: string, context: vscode.ExtensionContext) {
     this.rootPath = workspaceRoot;
@@ -34,12 +39,26 @@ export class FileTreeProvider implements vscode.TreeDataProvider<FileNode> {
   }
   
   refresh(): void {
-    // Nie buduj cache'a od nowa przy każdym odświeżeniu!
-    // Tylko odśwież widok
     this._onDidChangeTreeData.fire();
   }
+
+  /** NOWE: ustawianie aktywnego modułu (null = brak) */
+  setActiveModuleName(name: string | null) {
+    this.activeModuleName = name;
+    this.refresh();
+  }
+  getActiveModuleName(): string | null { return this.activeModuleName; }
   
   getTreeItem(element: FileNode): vscode.TreeItem {
+    // Informacyjny węzeł, gdy nie wybrano modułu
+    if (element.kind === 'info') {
+      const item = new vscode.TreeItem(element.name, vscode.TreeItemCollapsibleState.None);
+      item.iconPath = new vscode.ThemeIcon('info');
+      item.contextValue = 'info';
+      item.tooltip = 'Wybierz moduł w drzewie „Projects”, aby aktywować wybór plików.';
+      return item;
+    }
+
     const isSelected = this.selectedFiles.has(element.uri.fsPath);
     const isExpanded = this.expandedNodes.has(element.uri.fsPath);
     
@@ -53,30 +72,48 @@ export class FileTreeProvider implements vscode.TreeDataProvider<FileNode> {
     item.id = element.uri.fsPath;
     item.resourceUri = element.uri;
     item.tooltip = vscode.workspace.asRelativePath(element.uri);
+
+    // Opis: pokaż (zaznaczony) i do którego modułu dodajemy pliki
+    const moduleHint = this.activeModuleName ? `→ moduł: ${this.activeModuleName}` : undefined;
     
     if (element.isFile) {
       if (isSelected) {
         item.iconPath = new vscode.ThemeIcon('check', new vscode.ThemeColor('charts.green'));
-        item.description = '(zaznaczony)';
+        item.description = moduleHint ? `(zaznaczony) • ${moduleHint}` : '(zaznaczony)';
       } else {
         item.iconPath = new vscode.ThemeIcon('file');
+        item.description = moduleHint;
       }
       
       item.contextValue = isSelected ? 'fileSelected' : 'file';
-      
-      item.command = {
-        command: 'pm.toggleFileSelection',
-        title: isSelected ? 'Deselect file' : 'Select file',
-        arguments: [element.uri]
-      };
+
+      // Aktywuj komendę tylko, gdy wybrano moduł
+      if (this.activeModuleName) {
+        item.command = {
+          command: 'pm.toggleFileSelection',
+          title: isSelected ? 'Deselect file' : 'Select file',
+          arguments: [element.uri]
+        };
+      }
     } else {
       item.iconPath = new vscode.ThemeIcon('folder');
+      // Foldery nie mają komendy, ale są normalnie nawigowalne
     }
     
     return item;
   }
   
   async getChildren(element?: FileNode): Promise<FileNode[]> {
+    // Jeśli nie wybrano modułu — pokaż pojedynczy węzeł-informację
+    if (!this.activeModuleName && !element) {
+      return [{
+        uri: vscode.Uri.file(this.rootPath),
+        name: 'Wybierz moduł w drzewie Projektów, aby przypisywać pliki',
+        isFile: false,
+        kind: 'info'
+      }];
+    }
+
     // Zbuduj cache tylko raz przy pierwszym użyciu
     if (!this.cacheBuilt) {
       await this.buildFileCache();
@@ -96,13 +133,11 @@ export class FileTreeProvider implements vscode.TreeDataProvider<FileNode> {
   
   private async getRootNodes(): Promise<FileNode[]> {
     const rootNodes: FileNode[] = [];
-    const rootPaths = new Set<string>();
     
     for (const [filePath, node] of this.fileCache.entries()) {
       const relativePath = vscode.workspace.asRelativePath(filePath);
       if (!relativePath.includes(path.sep)) {
         rootNodes.push(node);
-        rootPaths.add(relativePath);
       }
     }
     
@@ -140,7 +175,8 @@ export class FileTreeProvider implements vscode.TreeDataProvider<FileNode> {
             uri: vscode.Uri.file(fullPath),
             name: part,
             isFile: false,
-            children: []
+            children: [],
+            kind: 'node'
           };
           folderMap.set(currentPath, folderNode);
           this.fileCache.set(fullPath, folderNode);
@@ -151,7 +187,8 @@ export class FileTreeProvider implements vscode.TreeDataProvider<FileNode> {
       const fileNode: FileNode = {
         uri: file,
         name: parts[parts.length - 1],
-        isFile: true
+        isFile: true,
+        kind: 'node'
       };
       this.fileCache.set(file.fsPath, fileNode);
       
@@ -195,21 +232,14 @@ export class FileTreeProvider implements vscode.TreeDataProvider<FileNode> {
     vscode.window.setStatusBarMessage('Wyczyszczono zaznaczenie plików', 2000);
   }
   
-  // NOWA: Metoda do czyszczenia zaznaczenia bez odświeżania widoku
   clearSelectionWithoutRefresh(): void {
     this.selectedFiles.clear();
   }
   
-  // NOWA: Metoda do zaznaczania wielu plików naraz
   selectFiles(filePaths: string[]): void {
     this.clearSelectionWithoutRefresh();
-    
-    // Filtruj wartości null/undefined
     const validFilePaths = filePaths.filter(p => p != null);
-    
-    validFilePaths.forEach(filePath => {
-      this.selectedFiles.add(filePath);
-    });
+    validFilePaths.forEach(filePath => this.selectedFiles.add(filePath));
     this.refresh();
     
     if (validFilePaths.length === 1) {
@@ -220,11 +250,7 @@ export class FileTreeProvider implements vscode.TreeDataProvider<FileNode> {
   }
   
   toggleFileSelection(filePath: string): boolean {
-    // Sprawdź czy filePath nie jest null
-    if (!filePath) {
-      return false;
-    }
-    
+    if (!filePath) return false;
     const wasSelected = this.selectedFiles.has(filePath);
     
     if (wasSelected) {
@@ -239,15 +265,10 @@ export class FileTreeProvider implements vscode.TreeDataProvider<FileNode> {
     return !wasSelected;
   }
   
-  // NOWE: Metody do zarządzania stanem rozwinięcia
+  // Stan rozwinięcia
   setExpanded(nodeId: string, expanded: boolean): void {
-    if (expanded) {
-      this.expandedNodes.add(nodeId);
-    } else {
-      this.expandedNodes.delete(nodeId);
-    }
-    
-    // Zapisz stan rozwinięcia
+    if (expanded) this.expandedNodes.add(nodeId);
+    else this.expandedNodes.delete(nodeId);
     this.context.workspaceState.update('pm.expandedFileNodes', Array.from(this.expandedNodes));
   }
   
@@ -255,7 +276,6 @@ export class FileTreeProvider implements vscode.TreeDataProvider<FileNode> {
     return Array.from(this.expandedNodes);
   }
   
-  // NOWA: Metoda do przebudowania cache'a (gdy pliki się zmieniają)
   async rebuildCache(): Promise<void> {
     this.cacheBuilt = false;
     this.fileCache.clear();
@@ -263,8 +283,8 @@ export class FileTreeProvider implements vscode.TreeDataProvider<FileNode> {
   }
 }
 
-/** Pomocnicze: foldery najpierw, potem pliki; w ramach grupy po nazwie */
+/** Foldery najpierw, potem pliki; w ramach grupy po nazwie */
 function compareFoldersFirstByName(a: FileNode, b: FileNode): number {
-  if (a.isFile !== b.isFile) return a.isFile ? 1 : -1; // folder (isFile=false) < file (isFile=true)
+  if (a.isFile !== b.isFile) return a.isFile ? 1 : -1;
   return a.name.localeCompare(b.name);
 }
