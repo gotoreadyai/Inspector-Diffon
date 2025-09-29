@@ -2,7 +2,7 @@
     "name": "project-manager",
     "displayName": "Project Manager",
     "description": "Zarządzaj projektami i zadaniami",
-    "version": "0.0.31",
+    "version": "0.0.34",
     "engines": {
         "vscode": "^1.74.0"
     },
@@ -26,17 +26,14 @@
     "contributes": {
         "commands": [
             {
-                "command": "pm.toggleTaskDone",
-                "title": "Toggle Task Done",
-                "icon": "$(check)"
-            },
-            {
                 "command": "pm.openProject",
-                "title": "Open Project"
+                "title": "Open Project",
+                "icon": "$(folder-opened)"
             },
             {
                 "command": "pm.startFromTemplate",
-                "title": "Start from Template"
+                "title": "Start from Template",
+                "icon": "$(rocket)"
             }
         ],
         "viewsContainers": {
@@ -44,7 +41,7 @@
                 {
                     "id": "pmActivity",
                     "title": "Project Manager",
-                    "icon": "./resources/icon.svg"
+                    "icon": "$(package)"
                 }
             ]
         },
@@ -52,18 +49,19 @@
             "pmActivity": [
                 {
                     "id": "pmExplorer",
-                    "name": "Project",
+                    "name": "Projects & Files",
                     "when": "true"
-                },
-                {
-                    "id": "pmFiles",
-                    "name": "Project milestone files",
-                    "when": "pm.hasActiveProject"
                 }
             ]
         },
         "menus": {
-            "view/title": []
+            "view/title": [
+                {
+                    "command": "pm.openProject",
+                    "when": "view == pmExplorer",
+                    "group": "navigation"
+                }
+            ]
         }
     }
 }
