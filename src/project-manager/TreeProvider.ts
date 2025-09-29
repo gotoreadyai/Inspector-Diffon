@@ -67,7 +67,7 @@ export class UnifiedTreeProvider implements vscode.TreeDataProvider<TreeNode> {
   getTreeItem(node: TreeNode): vscode.TreeItem {
     // Separator - visual divider
     if (node.kind === 'separator') {
-      const item = new vscode.TreeItem('────────────────────', vscode.TreeItemCollapsibleState.None);
+      const item = new vscode.TreeItem('┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈', vscode.TreeItemCollapsibleState.None);
       item.contextValue = 'separator';
       item.description = '';
       return item;
@@ -190,14 +190,14 @@ export class UnifiedTreeProvider implements vscode.TreeDataProvider<TreeNode> {
       // Add separator line
       nodes.push({ 
         kind: 'separator', 
-        label: '────────────────────'
+        label: '┈'
       });
 
       // Add files header
       const fileCount = this.selectedFiles.size;
       nodes.push({
         kind: 'filesHeader',
-        label: 'Workspace Files',
+        label: 'Milestone Files',
         description: fileCount > 0 ? `${fileCount} selected` : 'click to select'
       });
 

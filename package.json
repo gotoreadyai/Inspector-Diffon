@@ -2,7 +2,7 @@
     "name": "project-manager",
     "displayName": "Project Manager",
     "description": "Zarządzaj projektami i zadaniami",
-    "version": "0.0.34",
+    "version": "0.0.48",
     "engines": {
         "vscode": "^1.74.0"
     },
@@ -34,6 +34,23 @@
                 "command": "pm.startFromTemplate",
                 "title": "Start from Template",
                 "icon": "$(rocket)"
+            },
+            {
+                "command": "pm.openTerminal",
+                "title": "Open Terminal",
+                "icon": "$(terminal)"
+            },
+            {
+                "command": "pm.sendPrompt",
+                "title": "Send Prompt"
+            },
+            {
+                "command": "pm.addFiles",
+                "title": "Add Files"
+            },
+            {
+                "command": "pm.applyOperations",
+                "title": "Apply Operations"
             }
         ],
         "viewsContainers": {
@@ -59,7 +76,12 @@
                 {
                     "command": "pm.openProject",
                     "when": "view == pmExplorer",
-                    "group": "navigation"
+                    "group": "navigation@1"
+                },
+                {
+                    "command": "pm.openTerminal",
+                    "when": "view == pmExplorer",
+                    "group": "navigation@2"
                 }
             ]
         }
