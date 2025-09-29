@@ -12,10 +12,11 @@ export class PMTerminal implements vscode.Pseudoterminal {
   private buffer = '';
   private term?: vscode.Terminal;
 
-  // Command history
+  // Command history - limited to 10 entries
   private history: string[] = [];
   private historyIndex: number = -1;
   private tempBuffer: string = '';
+  private readonly MAX_HISTORY = 10;
 
   // ANSI color codes
   private readonly ansi = {
@@ -72,6 +73,20 @@ export class PMTerminal implements vscode.Pseudoterminal {
       return;
     }
 
+    if (data === '\x1b[C') {
+      // Arrow right - execute /add
+      this.println('');
+      this.addFiles().finally(() => this.printPrompt());
+      return;
+    }
+
+    if (data === '\x1b[D') {
+      // Arrow left - execute /apply
+      this.println('');
+      this.applyOperations('editor').finally(() => this.printPrompt());
+      return;
+    }
+
     // Handle regular input
     for (const ch of data) {
       if (ch === '\r') {
@@ -81,6 +96,12 @@ export class PMTerminal implements vscode.Pseudoterminal {
         // Add to history if not empty
         if (line) {
           this.history.push(line);
+          
+          // Keep only last 10 commands
+          if (this.history.length > this.MAX_HISTORY) {
+            this.history.shift();
+          }
+          
           this.historyIndex = this.history.length;
           this.tempBuffer = '';
         }
@@ -196,10 +217,6 @@ export class PMTerminal implements vscode.Pseudoterminal {
           this.showHistory();
           break;
 
-        case '/clear':
-          this.clearHistory();
-          break;
-
         default:
           this.warn(`Unknown command: ${cmd}`);
           this.info('Type /help for available commands');
@@ -224,11 +241,12 @@ export class PMTerminal implements vscode.Pseudoterminal {
       `${cmd('/add')} ${desc('Add selected files to context (generates prompt)')}`,
       `${cmd('/apply')} ${desc('Apply from active editor & close')}`,
       `${cmd('/applyc')} ${desc('Apply from clipboard')}`,
-      `${cmd('/history')} ${desc('Show command history')}`,
-      `${cmd('/clear')} ${desc('Clear command history')}`,
+      `${cmd('/history')} ${desc('Show last 10 commands')}`,
       '',
       this.style('Navigation:', this.ansi.bold),
       `${cmd('↑ / ↓')} ${desc('Navigate through command history')}`,
+      `${cmd('→')} ${desc('Execute /add')}`,
+      `${cmd('←')} ${desc('Execute /apply')}`,
     ].join('\n'));
   }
 
@@ -238,17 +256,10 @@ export class PMTerminal implements vscode.Pseudoterminal {
       return;
     }
 
-    this.println(this.style('Command History:', this.ansi.bold));
+    this.println(this.style('Command History (last 10):', this.ansi.bold));
     this.history.forEach((cmd, i) => {
       this.println(`  ${this.style((i + 1).toString().padStart(3), this.ansi.fg.gray)}  ${cmd}`);
     });
-  }
-
-  private clearHistory() {
-    this.history = [];
-    this.historyIndex = 0;
-    this.tempBuffer = '';
-    this.ok('Command history cleared');
   }
 
   private showStatus() {
