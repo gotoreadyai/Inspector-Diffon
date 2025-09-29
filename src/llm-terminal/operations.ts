@@ -3,7 +3,7 @@ import * as path from 'path';
 import * as fs from 'fs/promises';
 
 export interface FileOperation {
-  type: 'create' | 'delete' | 'rename' | 'search-replace';
+  type: 'create' | 'delete' | 'rename' | 'search-replace' | 'overwrite';
   file?: string;
   from?: string;
   to?: string;
@@ -16,6 +16,7 @@ const CREATE_RE = /<<<CREATE:\s*(.+?)>>>([\s\S]*?)<<<END>>>/g;
 const DELETE_RE = /<<<DELETE:\s*(.+?)>>>[\s\S]*?<<<END>>>/g;
 const RENAME_RE = /<<<RENAME:\s*(.+?)\s*->\s*(.+?)>>>[\s\S]*?<<<END>>>/g;
 const SR_RE = /<<<FILE:\s*(.+?)>>>\s*<<<SEARCH>>>([\s\S]*?)<<<REPLACE>>>([\s\S]*?)<<<END>>>/g;
+const OVERWRITE_RE = /<<<FILE:\s*(.+?)>>>((?:(?!<<<SEARCH>>>)[\s\S])*?)<<<END>>>/g;
 
 export class OperationsParser {
   static parse(text: string): FileOperation[] {
@@ -27,6 +28,7 @@ export class OperationsParser {
     DELETE_RE.lastIndex = 0;
     RENAME_RE.lastIndex = 0;
     SR_RE.lastIndex = 0;
+    OVERWRITE_RE.lastIndex = 0;
 
     while ((m = CREATE_RE.exec(text))) {
       ops.push({
@@ -51,12 +53,22 @@ export class OperationsParser {
       });
     }
 
+    // Search/Replace (has priority over overwrite)
     while ((m = SR_RE.exec(text))) {
       ops.push({
         type: 'search-replace',
         file: m[1].trim(),
         search: m[2].trim(),
         replace: m[3].trim()
+      });
+    }
+
+    // Overwrite (full file replacement - use sparingly!)
+    while ((m = OVERWRITE_RE.exec(text))) {
+      ops.push({
+        type: 'overwrite',
+        file: m[1].trim(),
+        content: m[2].trim()
       });
     }
 
@@ -123,6 +135,8 @@ export class OperationsExecutor {
         return this.rename(op);
       case 'search-replace':
         return this.searchReplace(op);
+      case 'overwrite':
+        return this.overwrite(op);
     }
   }
 
@@ -222,5 +236,21 @@ export class OperationsExecutor {
 
     const newContent = content.split(op.search).join(op.replace);
     await fs.writeFile(filePath, newContent, 'utf8');
+  }
+
+  private async overwrite(op: FileOperation) {
+    if (!op.file || op.content === undefined) {
+      throw new Error('OVERWRITE requires file path and content');
+    }
+
+    const filePath = this.resolvePath(op.file);
+
+    try {
+      await fs.access(filePath);
+    } catch {
+      throw new Error(`File ${op.file} does not exist`);
+    }
+
+    await fs.writeFile(filePath, op.content, 'utf8');
   }
 }

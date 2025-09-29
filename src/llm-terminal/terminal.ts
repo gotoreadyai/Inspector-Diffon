@@ -221,7 +221,7 @@ export class PMTerminal implements vscode.Pseudoterminal {
       `${cmd('(no prefix) text')} ${desc('Send prompt continuation')}`,
       `${cmd('/help')} ${desc('Show this help')}`,
       `${cmd('/status')} ${desc('Show project status')}`,
-      `${cmd('/add')} ${desc('Add selected files to context')}`,
+      `${cmd('/add')} ${desc('Add selected files to context (generates prompt)')}`,
       `${cmd('/apply')} ${desc('Apply from active editor & close')}`,
       `${cmd('/applyc')} ${desc('Apply from clipboard')}`,
       `${cmd('/history')} ${desc('Show command history')}`,
@@ -295,7 +295,7 @@ export class PMTerminal implements vscode.Pseudoterminal {
   private async addFiles() {
     try {
       await vscode.commands.executeCommand('pm.addFiles');
-      this.ok('Files added to context!');
+      this.ok('Files added to context! Prompt generated and copied to clipboard.');
     } catch (e: any) {
       this.err(`Error: ${e?.message || String(e)}`);
     }

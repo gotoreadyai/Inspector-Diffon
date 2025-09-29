@@ -79,6 +79,8 @@ export class ProjectStore {
     for (const m of data.modules) {
       m.tasks = m.tasks || [];
       m.files = m.files || [];
+      // Migrate old projects - if initialFiles doesn't exist, assume current files are initial
+      m.initialFiles = m.initialFiles || [...m.files];
     }
     
     return data;
@@ -129,7 +131,8 @@ export function instantiateTemplate(tpl: Template, name: string): Project {
       id: uid(),
       name: m.name,
       tasks: (m.tasks || []).map(cloneTask),
-      files: []
+      files: [],
+      initialFiles: []  // New projects start with no files
     }))
   };
 }

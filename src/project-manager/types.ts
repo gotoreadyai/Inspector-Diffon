@@ -13,7 +13,8 @@ export interface Module {
   id: string;
   name: string;
   tasks: Task[];
-  files: string[];
+  files: string[];           // all files currently in module
+  initialFiles: string[];    // files from module creation (baseline)
 }
 
 export interface Project {
