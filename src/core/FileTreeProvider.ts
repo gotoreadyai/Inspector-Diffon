@@ -1,6 +1,7 @@
 // src/core/FileTreeProvider.ts
 import * as vscode from 'vscode';
 import * as path from 'path';
+import { COMMANDS } from '../constants';
 
 export interface FileNode {
   uri: vscode.Uri;
@@ -90,7 +91,7 @@ export class FileTreeProvider implements vscode.TreeDataProvider<FileNode> {
       // Aktywuj komendę tylko, gdy wybrano moduł
       if (this.activeModuleName) {
         item.command = {
-          command: 'pm.toggleFileSelection',
+          command: COMMANDS.TOGGLE_FILE_SELECTION,
           title: isSelected ? 'Deselect file' : 'Select file',
           arguments: [element.uri]
         };
@@ -229,7 +230,7 @@ export class FileTreeProvider implements vscode.TreeDataProvider<FileNode> {
   clearSelection(): void {
     this.selectedFiles.clear();
     this.refresh();
-    vscode.window.setStatusBarMessage('Wyczyszczono zaznaczenie plików', 2000);
+    // (usunięto zależność od komendy czyszczącej — pozostawiamy jedynie odświeżenie)
   }
   
   clearSelectionWithoutRefresh(): void {

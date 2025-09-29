@@ -21,5 +21,5 @@ export function counts(p: Project) {
 }
 
 export function formatProjectSummary(c: { modules: number; total: number; todo: number; done: number; }) {
-  return `${c.modules} modułów • ${c.total} zadań (⏳${c.todo} ✅${c.done})`;
+  return `${c.modules} milestones • ${c.total} tasks (⏳${c.todo} ✅${c.done})`;
 }

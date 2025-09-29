@@ -6,12 +6,12 @@ import { Project, Module } from "./models";
 import { Storage } from "./core/Storage";
 import { counts, formatProjectSummary } from "./utils";
 import { FileTreeProvider } from "./core/FileTreeProvider";
+import { COMMANDS } from "./constants";
 
 // Importy komend
 import { registerToggleTaskDoneCommand } from "./commands/toggleTaskDone";
 import { registerOpenProjectCommand } from "./commands/openProject";
 import { registerStartFromTemplateCommand } from "./commands/startFromTemplate";
-import { registerClearFileSelectionCommand } from "./commands/clearFileSelection";
 import { registerShowSelectedFilesCommand } from "./commands/showSelectedFiles";
 
 // Dodaj stałe POSIX
@@ -73,11 +73,10 @@ export async function activate(context: vscode.ExtensionContext) {
     registerToggleTaskDoneCommand(provider),
     registerOpenProjectCommand(storage, applyActiveProject),
     registerStartFromTemplateCommand(storage, applyActiveProject),
-    registerClearFileSelectionCommand(fileTreeProvider),
     registerShowSelectedFilesCommand(fileTreeProvider),
 
     // Kliknięcie modułu = ustaw aktywny moduł, jego files => zaznaczenie w drzewie
-    vscode.commands.registerCommand("pm.selectModule", (module: Module) => {
+    vscode.commands.registerCommand(COMMANDS.SELECT_MODULE, (module: Module) => {
       activeModule = module || null;
 
       // NOWE: ustaw info w drzewie do którego modułu przypisujemy pliki
@@ -146,9 +145,9 @@ export async function activate(context: vscode.ExtensionContext) {
     updateFileStatus(fileTreeProvider);
   });
 
-  // Klik na pliku = dodaj/usuń z activeModule.files, a potem odśwież zaznaczenie
+  // Klik na pliku = dodaj/usuń z activeModule.files, a potem odśwież widok zaznaczenia
   context.subscriptions.push(
-    vscode.commands.registerCommand("pm.toggleFileSelection", async (fileUri: vscode.Uri) => {
+    vscode.commands.registerCommand(COMMANDS.TOGGLE_FILE_SELECTION, async (fileUri: vscode.Uri) => {
       if (!fileUri || !fileUri.fsPath) return;
 
       const project = storage.activeProject;
@@ -174,10 +173,13 @@ export async function activate(context: vscode.ExtensionContext) {
         vscode.window.setStatusBarMessage(`Przypięto plik do modułu: ${path.basename(fileUri.fsPath)}`, 2000);
       }
 
-      // zapisz projekt i odśwież widok zaznaczenia wg aktualnej listy modułu
+      // zapisz projekt i odśwież widok zaznaczenia
       await storage.saveActive();
-      fileTreeProvider.selectFiles(activeModule.files);
 
+      // 🔧 NOWE: odśwież drzewo „Projekty”, aby zaktualizować licznik plików w module
+      provider.refresh();
+
+      fileTreeProvider.selectFiles(activeModule.files);
       updateFileStatus(fileTreeProvider);
     })
   );
@@ -205,7 +207,7 @@ async function revealProjectRoot(project: Project) {
 function updateStatusBar(project: Project | null) {
   if (!project) {
     statusItem.text = "$(package) No Project";
-    statusItem.tooltip = "Brak aktywnego projektu";
+    statusItem.tooltip = "No active project";
     statusItem.show();
     return;
   }
@@ -220,8 +222,8 @@ function updateFileStatus(fileTreeProvider: FileTreeProvider) {
   const activeModuleName = fileTreeProvider.getActiveModuleName();
 
   if (!activeModuleName) {
-    fileStatusBarItem.text = `$(file) wybierz moduł, aby przypisywać pliki`;
-    fileStatusBarItem.tooltip = `Kliknij moduł w drzewie Projektów (PM Explorer)`;
+    fileStatusBarItem.text = `$(file) select a module to assign files`;
+    fileStatusBarItem.tooltip = `Click on the module in the Projects tree (PM Explorer)`;
     fileStatusBarItem.command = undefined;
     fileStatusBarItem.show();
     return;
@@ -232,15 +234,16 @@ function updateFileStatus(fileTreeProvider: FileTreeProvider) {
     const label = `$(file) ${selectedFiles.length} plików • moduł: ${activeModuleName}`;
     fileStatusBarItem.text = label;
     if (fileNames.length > 50) {
-      fileStatusBarItem.tooltip = `Zaznaczone: ${fileNames.substring(0, 50)}...`;
+      fileStatusBarItem.tooltip = `Selected: ${fileNames.substring(0, 50)}...`;
     } else {
-      fileStatusBarItem.tooltip = `Zaznaczone: ${fileNames}`;
+      fileStatusBarItem.tooltip = `Selected: ${fileNames}`;
     }
-    fileStatusBarItem.command = "pm.clearFileSelection";
+    // Usunięto akcję czyszczenia — brak komendy po kliknięciu
+    fileStatusBarItem.command = undefined;
     fileStatusBarItem.show();
   } else {
-    fileStatusBarItem.text = `$(file) 0 plików • moduł: ${activeModuleName}`;
-    fileStatusBarItem.tooltip = `Nie wybrano plików dla modułu: ${activeModuleName}`;
+    fileStatusBarItem.text = `$(file) 0 files • milestone: ${activeModuleName}`;
+    fileStatusBarItem.tooltip = `No files selected for the milestone: ${activeModuleName}`;
     fileStatusBarItem.command = undefined;
     fileStatusBarItem.show();
   }

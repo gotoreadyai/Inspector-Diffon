@@ -2,7 +2,7 @@
     "name": "project-manager",
     "displayName": "Project Manager",
     "description": "Zarządzaj projektami i zadaniami",
-    "version": "0.0.17",
+    "version": "0.0.20",
     "engines": {
         "vscode": "^1.74.0"
     },
@@ -37,10 +37,6 @@
             {
                 "command": "pm.startFromTemplate",
                 "title": "Start from Template"
-            },
-            {
-                "command": "pm.clearFileSelection",
-                "title": "Clear File Selection"
             }
         ],
         "viewsContainers": {
@@ -56,24 +52,18 @@
             "pmActivity": [
                 {
                     "id": "pmExplorer",
-                    "name": "Projekty",
+                    "name": "Project",
                     "when": "true"
                 },
                 {
                     "id": "pmFiles",
-                    "name": "Pliki Projektu",
+                    "name": "Project milestone files",
                     "when": "pm.hasActiveProject"
                 }
             ]
         },
         "menus": {
-            "view/title": [
-                {
-                    "command": "pm.clearFileSelection",
-                    "when": "view == pmFiles",
-                    "group": "navigation"
-                }
-            ]
+            "view/title": []
         }
     }
 }
