@@ -1,3 +1,4 @@
+// src/core/FileTreeProvider.ts
 import * as vscode from 'vscode';
 import * as path from 'path';
 
@@ -105,8 +106,8 @@ export class FileTreeProvider implements vscode.TreeDataProvider<FileNode> {
       }
     }
     
-    // Sortuj alfabetycznie dla stabilności
-    return rootNodes.sort((a, b) => a.name.localeCompare(b.name));
+    // FOLDERY NAJPIERW, potem pliki — w obu grupach alfabetycznie
+    return rootNodes.sort(compareFoldersFirstByName);
   }
   
   private async buildFileCache(): Promise<void> {
@@ -179,8 +180,8 @@ export class FileTreeProvider implements vscode.TreeDataProvider<FileNode> {
       }
     }
     
-    // Sortuj alfabetycznie dla stabilności
-    return children.sort((a, b) => a.name.localeCompare(b.name));
+    // FOLDERY NAJPIERW, potem pliki — w obu grupach alfabetycznie
+    return children.sort(compareFoldersFirstByName);
   }
   
   // Public methods
@@ -260,4 +261,10 @@ export class FileTreeProvider implements vscode.TreeDataProvider<FileNode> {
     this.fileCache.clear();
     this.refresh();
   }
+}
+
+/** Pomocnicze: foldery najpierw, potem pliki; w ramach grupy po nazwie */
+function compareFoldersFirstByName(a: FileNode, b: FileNode): number {
+  if (a.isFile !== b.isFile) return a.isFile ? 1 : -1; // folder (isFile=false) < file (isFile=true)
+  return a.name.localeCompare(b.name);
 }
