@@ -1,16 +1,21 @@
-// src/templates/loader.ts
 import * as vscode from "vscode";
 import { Template } from "./Template";
+
+// POSIX-compliant wzorce
+const TEMPLATES_DIR = '.inspector-diff/templates';
+const TEMPLATES_GLOB = '*.json';
 
 export async function loadTemplates(): Promise<Template[]> {
   const root = vscode.workspace.workspaceFolders?.[0]?.uri;
   if (!root) return [];
-  const dir = vscode.Uri.joinPath(root, ".inspector-diff", "templates");
+  
+  const dir = vscode.Uri.joinPath(root, TEMPLATES_DIR);
   try {
     const files = await vscode.workspace.fs.readDirectory(dir);
     const out: Template[] = [];
+    
     for (const [name, type] of files) {
-      if (type === vscode.FileType.File && name.endsWith(".json")) {
+      if (type === vscode.FileType.File && name.endsWith('.json')) {
         try {
           const fileUri = vscode.Uri.joinPath(dir, name);
           const raw = Buffer.from(
@@ -25,5 +30,7 @@ export async function loadTemplates(): Promise<Template[]> {
       }
     }
     return out;
-  } catch { return []; }
+  } catch {
+    return [];
+  }
 }

@@ -1,5 +1,6 @@
 export * from './toggleTaskDone';
 export * from './openProject';
 export * from './startFromTemplate';
-export * from './assignFilesToModule';
+// usunięto: export * from './assignFilesToModule';
 export * from './clearFileSelection';
+export * from './showSelectedFiles';

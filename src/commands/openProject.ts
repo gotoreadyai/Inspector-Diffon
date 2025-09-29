@@ -1,4 +1,3 @@
-// src/commands/openProject.ts
 import * as vscode from "vscode";
 import { Storage } from "../core/Storage";
 import { Project } from "../models";
@@ -12,4 +11,4 @@ export function registerOpenProjectCommand(
     if (!p) return;
     await applyActiveProject(p, `Wczytano projekt „${p.name}”.`, 2000);
   });
-}
+} 

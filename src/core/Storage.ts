@@ -3,6 +3,7 @@ import * as fs from "fs/promises";
 import { Project } from "../models";
 
 const STATE_KEY = "pm.activeProjectPath";
+const PROJECTS_DIR = ".inspector-diff/projects";
 
 export class Storage {
   constructor(private ctx: vscode.ExtensionContext) {}
@@ -22,7 +23,7 @@ export class Storage {
     if (!pick || !pick[0]) return null;
     const uri = pick[0];
     const raw = await fs.readFile(uri.fsPath, "utf8");
-    const data = JSON.parse(raw) as Project & { files?: string[] }; // Dodajemy typ dla migracji
+    const data = JSON.parse(raw) as Project & { files?: string[] };
     
     // Migracja: jeśli stary projekt ma files, przenieś je do pierwszego modułu
     if (data.files && data.files.length > 0 && data.modules.length > 0) {
@@ -45,7 +46,7 @@ export class Storage {
     try {
       const uri = vscode.Uri.file(lastPath);
       const raw = await fs.readFile(uri.fsPath, "utf8");
-      const data = JSON.parse(raw) as Project & { files?: string[] }; // Dodajemy typ dla migracji
+      const data = JSON.parse(raw) as Project & { files?: string[] };
       
       // Migracja: jeśli stary projekt ma files, przenieś je do pierwszego modułu
       if (data.files && data.files.length > 0 && data.modules.length > 0) {
@@ -73,13 +74,17 @@ export class Storage {
   async createFromTemplateAndSave(project: Project): Promise<string> {
     const root = vscode.workspace.workspaceFolders?.[0]?.uri;
     if (!root) throw new Error("Brak otwartego folderu roboczego");
-    const dir = vscode.Uri.joinPath(root, ".inspector-diff", "projects");
+    
+    // Użyj stałej PROJECTS_DIR
+    const dir = vscode.Uri.joinPath(root, PROJECTS_DIR);
     await vscode.workspace.fs.createDirectory(dir);
     const file = vscode.Uri.joinPath(dir, `${project.name}.json`);
+    
     await vscode.workspace.fs.writeFile(
       file,
       Buffer.from(JSON.stringify(project, null, 2), "utf8")
     );
+    
     this._active = project;
     this._activeUri = file;
     await this.ctx.workspaceState.update(STATE_KEY, file.fsPath);

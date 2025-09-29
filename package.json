@@ -2,7 +2,7 @@
     "name": "project-manager",
     "displayName": "Project Manager",
     "description": "Zarządzaj projektami i zadaniami",
-    "version": "0.0.5",
+    "version": "0.0.15",
     "engines": {
         "vscode": "^1.74.0"
     },
@@ -39,10 +39,6 @@
                 "title": "Start from Template"
             },
             {
-                "command": "pm.assignFilesToModule",
-                "title": "Assign Files to Module"
-            },
-            {
                 "command": "pm.clearFileSelection",
                 "title": "Clear File Selection"
             }
@@ -76,13 +72,6 @@
                     "command": "pm.clearFileSelection",
                     "when": "view == pmFiles",
                     "group": "navigation"
-                }
-            ],
-            "view/item/context": [
-                {
-                    "command": "pm.assignFilesToModule",
-                    "when": "view == pmExplorer && viewItem == module",
-                    "group": "inline"
                 }
             ]
         }

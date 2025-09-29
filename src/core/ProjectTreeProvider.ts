@@ -14,6 +14,9 @@ const COLOR = {
   templateTaskTodo: new vscode.ThemeColor("descriptionForeground"),
 };
 
+// Dodaj stałe dla wzorców POSIX
+const TEMPLATES_GLOB = '.inspector-diff/templates/*.json';
+
 export class ProjectTreeProvider implements vscode.TreeDataProvider<TreeNode> {
   private _onDidChangeTreeData = new vscode.EventEmitter<TreeNode | void>();
   readonly onDidChangeTreeData = this._onDidChangeTreeData.event;
@@ -28,7 +31,9 @@ export class ProjectTreeProvider implements vscode.TreeDataProvider<TreeNode> {
     this.setupTemplatesWatcher();
   }
 
-  refresh() { this._onDidChangeTreeData.fire(); }
+  refresh() { 
+    this._onDidChangeTreeData.fire();
+  }
   
   private async refreshTemplates() {
     this.templates = await loadTemplates();
@@ -38,7 +43,8 @@ export class ProjectTreeProvider implements vscode.TreeDataProvider<TreeNode> {
   private setupTemplatesWatcher() {
     const root = vscode.workspace.workspaceFolders?.[0]?.uri;
     if (!root) return;
-    const pattern = new vscode.RelativePattern(root, ".inspector-diff/templates/*.json");
+    // Użyj POSIX-compliant wzorca
+    const pattern = new vscode.RelativePattern(root, TEMPLATES_GLOB);
     this.watcher?.dispose();
     this.watcher = vscode.workspace.createFileSystemWatcher(pattern);
     this.watcher.onDidCreate(() => this.refreshTemplates());
@@ -85,6 +91,12 @@ export class ProjectTreeProvider implements vscode.TreeDataProvider<TreeNode> {
       item.iconPath = new vscode.ThemeIcon("package", COLOR.project);
     } else if (element.kind === "module") {
       item.iconPath = new vscode.ThemeIcon("library", COLOR.module);
+      // Dodajemy komendę, która zostanie wywołana po kliknięciu modułu
+      item.command = {
+        command: "pm.selectModule",
+        title: "Select module",
+        arguments: [element.module]
+      };
     }
 
     return item;
