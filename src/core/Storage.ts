@@ -1,8 +1,8 @@
-// src/core/Storage.ts
 import * as vscode from "vscode";
 import * as fs from "fs/promises";
 import { Project } from "../models";
-import { STATE_KEY } from "../constants";
+
+const STATE_KEY = "pm.activeProjectPath";
 
 export class Storage {
   constructor(private ctx: vscode.ExtensionContext) {}
@@ -22,7 +22,17 @@ export class Storage {
     if (!pick || !pick[0]) return null;
     const uri = pick[0];
     const raw = await fs.readFile(uri.fsPath, "utf8");
-    const data = JSON.parse(raw) as Project;
+    const data = JSON.parse(raw) as Project & { files?: string[] }; // Dodajemy typ dla migracji
+    
+    // Migracja: jeśli stary projekt ma files, przenieś je do pierwszego modułu
+    if (data.files && data.files.length > 0 && data.modules.length > 0) {
+      if (!data.modules[0].files) {
+        data.modules[0].files = [];
+      }
+      data.modules[0].files.push(...data.files);
+      delete data.files;
+    }
+    
     this._active = data;
     this._activeUri = uri;
     await this.ctx.workspaceState.update(STATE_KEY, uri.fsPath);
@@ -35,11 +45,23 @@ export class Storage {
     try {
       const uri = vscode.Uri.file(lastPath);
       const raw = await fs.readFile(uri.fsPath, "utf8");
-      const data = JSON.parse(raw) as Project;
+      const data = JSON.parse(raw) as Project & { files?: string[] }; // Dodajemy typ dla migracji
+      
+      // Migracja: jeśli stary projekt ma files, przenieś je do pierwszego modułu
+      if (data.files && data.files.length > 0 && data.modules.length > 0) {
+        if (!data.modules[0].files) {
+          data.modules[0].files = [];
+        }
+        data.modules[0].files.push(...data.files);
+        delete data.files;
+      }
+      
       this._active = data;
       this._activeUri = uri;
       return data;
-    } catch { return null; }
+    } catch {
+      return null;
+    }
   }
 
   async saveActive(): Promise<void> {

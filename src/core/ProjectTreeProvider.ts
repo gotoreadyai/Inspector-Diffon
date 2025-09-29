@@ -1,4 +1,3 @@
-// src/core/ProjectTreeProvider.ts
 import * as vscode from "vscode";
 import { Module, Project, Task, TaskStatus } from "../models";
 import { counts, ensureArrays, formatProjectSummary } from "../utils";
@@ -10,7 +9,9 @@ const COLOR = {
   template: new vscode.ThemeColor("charts.orange"),
   module: new vscode.ThemeColor("charts.yellow"),
   taskDone: new vscode.ThemeColor("terminal.ansiGreen"),
-  taskTodo: new vscode.ThemeColor("disabledForeground"),
+  taskTodo: new vscode.ThemeColor("descriptionForeground"),
+  templateTaskDone: new vscode.ThemeColor("charts.green"),
+  templateTaskTodo: new vscode.ThemeColor("descriptionForeground"),
 };
 
 export class ProjectTreeProvider implements vscode.TreeDataProvider<TreeNode> {
@@ -46,11 +47,15 @@ export class ProjectTreeProvider implements vscode.TreeDataProvider<TreeNode> {
   }
 
   getTreeItem(element: TreeNode): vscode.TreeItem {
-    const collapsible = element.kind === "project"
-      ? vscode.TreeItemCollapsibleState.Expanded
-      : element.kind === "task" && !element.task?.children?.length
-      ? vscode.TreeItemCollapsibleState.None
-      : vscode.TreeItemCollapsibleState.Collapsed;
+    let collapsible = vscode.TreeItemCollapsibleState.Collapsed;
+    
+    if (element.kind === "project") {
+      collapsible = vscode.TreeItemCollapsibleState.Expanded;
+    } else if (element.kind === "task" && !element.task?.children?.length) {
+      collapsible = vscode.TreeItemCollapsibleState.None;
+    } else if (element.kind === "templateTask") {
+      collapsible = vscode.TreeItemCollapsibleState.None;
+    }
 
     const item = new vscode.TreeItem(element.label, collapsible);
     item.id = stableId(element);
@@ -65,10 +70,17 @@ export class ProjectTreeProvider implements vscode.TreeDataProvider<TreeNode> {
         title: "Toggle",
         arguments: [element],
       };
+    } else if (element.kind === "templateTask") {
+      item.iconPath = iconForTemplateTask(element.description as TaskStatus);
     } else if (element.kind === "templatesRoot") {
       item.iconPath = new vscode.ThemeIcon("symbol-structure", COLOR.templatesRoot);
     } else if (element.kind === "template") {
-      item.iconPath = new vscode.ThemeIcon("file", COLOR.template);
+      item.iconPath = new vscode.ThemeIcon("rocket", COLOR.template);
+      item.command = {
+        command: "pm.startFromTemplate",
+        title: "Start from template",
+        arguments: [element]
+      };
     } else if (element.kind === "project") {
       item.iconPath = new vscode.ThemeIcon("package", COLOR.project);
     } else if (element.kind === "module") {
@@ -163,10 +175,11 @@ export interface TreeNode {
 type NodeKind = "project" | "module" | "task";
 
 function nodeModule(m: Module): TreeNode {
+  const fileCount = m.files?.length || 0;
   return {
     kind: "module",
     label: m.name,
-    description: `${countTasks(m)} zadań`,
+    description: `${countTasks(m)} zadań, ${fileCount} plików`,
     module: m,
   };
 }
@@ -194,7 +207,13 @@ function nodeTemplate(tpl: Template): TreeNode {
 function iconForTask(status: TaskStatus) {
   return status === "done"
     ? new vscode.ThemeIcon("check", COLOR.taskDone)
-    : new vscode.ThemeIcon("circle-large-outline", COLOR.taskTodo);
+    : new vscode.ThemeIcon("circle-outline", COLOR.taskTodo);
+}
+
+function iconForTemplateTask(status: TaskStatus) {
+  return status === "done"
+    ? new vscode.ThemeIcon("pass", COLOR.templateTaskDone)
+    : new vscode.ThemeIcon("circle-outline", COLOR.templateTaskTodo);
 }
 
 function countTasks(m: Module) {

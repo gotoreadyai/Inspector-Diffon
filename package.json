@@ -1,30 +1,58 @@
 {
-    "name": "project-modules-tasks",
-    "displayName": "Project Modules & Tasks",
-    "description": "Explorer projektów na bazie szablonów. Status zadań: todo ⇄ done.",
-    "version": "1.1.9",
-    "publisher": "hildebrand-demo",
+    "name": "project-manager",
+    "displayName": "Project Manager",
+    "description": "Zarządzaj projektami i zadaniami",
+    "version": "0.0.5",
     "engines": {
-        "vscode": "^1.90.0"
+        "vscode": "^1.74.0"
     },
     "categories": [
         "Other"
     ],
     "activationEvents": [
-        "onStartupFinished",
-        "onView:pmExplorer",
-        "onCommand:pm.openProject",
-        "onCommand:pm.startFromTemplate",
-        "onCommand:pm.toggleTaskDone"
+        "onStartupFinished"
     ],
     "main": "./out/extension.js",
+    "scripts": {
+        "vscode:prepublish": "npm run compile",
+        "compile": "tsc -p ./",
+        "watch": "tsc -watch -p ./"
+    },
+    "devDependencies": {
+        "@types/vscode": "^1.74.0",
+        "@types/node": "16.x",
+        "typescript": "^4.9.4"
+    },
     "contributes": {
+        "commands": [
+            {
+                "command": "pm.toggleTaskDone",
+                "title": "Toggle Task Done",
+                "icon": "$(check)"
+            },
+            {
+                "command": "pm.openProject",
+                "title": "Open Project"
+            },
+            {
+                "command": "pm.startFromTemplate",
+                "title": "Start from Template"
+            },
+            {
+                "command": "pm.assignFilesToModule",
+                "title": "Assign Files to Module"
+            },
+            {
+                "command": "pm.clearFileSelection",
+                "title": "Clear File Selection"
+            }
+        ],
         "viewsContainers": {
             "activitybar": [
                 {
                     "id": "pmActivity",
-                    "title": "Project Explorer",
-                    "icon": "resources/icon.svg"
+                    "title": "Project Manager",
+                    "icon": "./resources/icon.svg"
                 }
             ]
         },
@@ -32,52 +60,31 @@
             "pmActivity": [
                 {
                     "id": "pmExplorer",
-                    "name": "Project Explorer"
+                    "name": "Projekty",
+                    "when": "true"
+                },
+                {
+                    "id": "pmFiles",
+                    "name": "Pliki Projektu",
+                    "when": "pm.hasActiveProject"
                 }
             ]
         },
-        "commands": [
-            {
-                "command": "pm.openProject",
-                "title": "Otwórz projekt z pliku",
-                "icon": "$(new-folder)"
-            },
-            {
-                "command": "pm.startFromTemplate",
-                "title": "Start project from this template",
-                "icon": "$(rocket)"
-            },
-            {
-                "command": "pm.toggleTaskDone",
-                "title": "Przełącz status zadania",
-                "icon": "$(check)"
-            }
-        ],
         "menus": {
             "view/title": [
                 {
-                    "command": "pm.openProject",
-                    "when": "view == pmExplorer",
-                    "group": "navigation@1"
+                    "command": "pm.clearFileSelection",
+                    "when": "view == pmFiles",
+                    "group": "navigation"
                 }
             ],
             "view/item/context": [
                 {
-                    "command": "pm.startFromTemplate",
-                    "when": "view == pmExplorer && viewItem == template",
-                    "group": "inline@1"
+                    "command": "pm.assignFilesToModule",
+                    "when": "view == pmExplorer && viewItem == module",
+                    "group": "inline"
                 }
             ]
         }
-    },
-    "scripts": {
-        "vscode:prepublish": "tsc -p ./",
-        "build": "tsc -p ./",
-        "watch": "tsc -w -p ./"
-    },
-    "devDependencies": {
-        "@types/node": "^18.19.0",
-        "typescript": "^5.4.0",
-        "vsce": "^2.15.0"
     }
 }

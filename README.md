@@ -35,3 +35,5 @@ Pozwala przygotować prompt z wybranych plików i stosować diff zwrócony przez
  console.log("Hello world");
 # Inspector-Diffon
 # Inspector-Diffon
+
+

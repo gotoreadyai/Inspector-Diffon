@@ -9,4 +9,5 @@ export interface Task {
   tags?: string[];
   estimate?: number;
   children?: Task[];
+  files?: string[];
 }
