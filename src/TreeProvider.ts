@@ -197,7 +197,7 @@ export class UnifiedTreeProvider implements vscode.TreeDataProvider<TreeNode> {
       const fileCount = this.selectedFiles.size;
       nodes.push({
         kind: 'filesHeader',
-        label: '📁 Workspace Files',
+        label: 'Workspace Files',
         description: fileCount > 0 ? `${fileCount} selected` : 'click to select'
       });
 
