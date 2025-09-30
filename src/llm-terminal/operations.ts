@@ -87,9 +87,10 @@ export class OperationsExecutor {
     this.outputChannel = outputChannel;
   }
 
-  private log(msg: string) {
+  private log(msg: string, indent: number = 0) {
     const ts = new Date().toLocaleTimeString();
-    this.outputChannel.appendLine(`[${ts}] ${msg}`);
+    const prefix = '  '.repeat(indent);
+    this.outputChannel.appendLine(`${prefix}[${ts}] ${msg}`);
   }
 
   async executeAll(operations: FileOperation[]): Promise<{
@@ -100,6 +101,12 @@ export class OperationsExecutor {
     let success = 0;
     let errors = 0;
     const applied: FileOperation[] = [];
+
+    // Header
+    this.outputChannel.appendLine('');
+    
+    this.log('🚀 Starting operation batch');
+
 
     await vscode.window.withProgress(
       {
@@ -113,14 +120,18 @@ export class OperationsExecutor {
             await this.executeOperation(op);
             success++;
             applied.push(op);
-            this.log(`✓ ${op.type}: ${op.file || op.from || ''}`);
+            this.log(`├─ ✓ ${op.type}: ${op.file || op.from || ''}`);
           } catch (e: any) {
             errors++;
-            this.log(`✗ ${op.type}: ${e?.message || String(e)}`);
+            this.log(`├─ ✗ ${op.type}: ${e?.message || String(e)}`);
           }
         }
       }
     );
+
+    // Footer
+    this.log(`└─ 📊 Summary: ${success} succeeded, ${errors} failed`);
+    this.outputChannel.appendLine('');
 
     return { success, errors, applied };
   }

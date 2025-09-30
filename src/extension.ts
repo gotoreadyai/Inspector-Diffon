@@ -155,7 +155,7 @@ export async function activate(context: vscode.ExtensionContext) {
         return;
       }
 
-      pty = new PMTerminal(store, provider);
+      pty = new PMTerminal(store, provider, outputChannel);
       terminalInstance = vscode.window.createTerminal({
         name: 'Project Manager',
         pty

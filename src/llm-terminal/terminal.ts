@@ -41,7 +41,8 @@ export class PMTerminal implements vscode.Pseudoterminal {
 
   constructor(
     private store: ProjectStore,
-    private provider: UnifiedTreeProvider
+    private provider: UnifiedTreeProvider,
+    private outputChannel: vscode.OutputChannel
   ) {}
 
   attach(term: vscode.Terminal) {
@@ -74,16 +75,14 @@ export class PMTerminal implements vscode.Pseudoterminal {
     }
 
     if (data === '\x1b[C') {
-      // Arrow right - execute /add
-      this.println('');
-      this.addFiles().finally(() => this.printPrompt());
+      // Arrow right - insert /add command
+      this.insertCommand('/add');
       return;
     }
 
     if (data === '\x1b[D') {
-      // Arrow left - execute /apply
-      this.println('');
-      this.applyOperations('editor').finally(() => this.printPrompt());
+      // Arrow left - insert /apply command
+      this.insertCommand('/apply');
       return;
     }
 
@@ -120,6 +119,17 @@ export class PMTerminal implements vscode.Pseudoterminal {
         this.write(ch);
       }
     }
+  }
+
+  private insertCommand(command: string) {
+    // Clear current line
+    this.clearLine();
+    
+    // Set buffer to command
+    this.buffer = command;
+    
+    // Redraw prompt and command
+    this.write(this.prompt + this.buffer);
   }
 
   private navigateHistory(direction: number) {
@@ -245,8 +255,8 @@ export class PMTerminal implements vscode.Pseudoterminal {
       '',
       this.style('Navigation:', this.ansi.bold),
       `${cmd('↑ / ↓')} ${desc('Navigate through command history')}`,
-      `${cmd('→')} ${desc('Execute /add')}`,
-      `${cmd('←')} ${desc('Execute /apply')}`,
+      `${cmd('→')} ${desc('Insert /add command')}`,
+      `${cmd('←')} ${desc('Insert /apply command')}`,
     ].join('\n'));
   }
 
@@ -316,6 +326,9 @@ export class PMTerminal implements vscode.Pseudoterminal {
     try {
       await vscode.commands.executeCommand('pm.applyOperations', source);
       this.ok('Operations applied!');
+      
+      // Switch to output channel
+      this.outputChannel.show(true);
     } catch (e: any) {
       this.err(`Error: ${e?.message || String(e)}`);
     }
